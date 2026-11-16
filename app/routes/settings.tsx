@@ -10,6 +10,9 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
+// PROTOTYPE (Notification Preferences, ticket #20)
+import { NotificationPreferencesPrototype } from "~/components/notification-preferences-prototype";
+import { useRouteLoaderData } from "react-router";
 import { UserRole, RefundStatus, users } from "~/db/schema";
 import { AlertTriangle } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
@@ -104,6 +107,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
   ).length;
   const fetcher = useFetcher();
   const nameInputRef = useRef<HTMLInputElement>(null);
+  // PROTOTYPE (ticket #20): Team Admin status comes from the app layout loader
+  const layoutData = useRouteLoaderData("routes/layout.app") as { isTeamAdmin?: boolean } | undefined;
 
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data?.success) {
@@ -187,6 +192,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </fetcher.Form>
         </CardContent>
       </Card>
+
+      {/* PROTOTYPE (Notification Preferences, ticket #20) */}
+      <NotificationPreferencesPrototype role={user.role} isTeamAdmin={!!layoutData?.isTeamAdmin} />
 
       {refundRequests.length > 0 && (
         <Card className="mt-8 max-w-md">
