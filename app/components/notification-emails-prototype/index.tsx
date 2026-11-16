@@ -480,7 +480,7 @@ function VariantC({ e }: { e: EmailCopy }) {
           <div className="font-semibold text-zinc-600">Your emails</div>
           {e.mandatory ? (
             <span className="inline-flex items-center gap-1">
-              <Lock className="size-3" /> Refund decisions always email you.
+              <Lock className="size-3" /> Emails about your refund requests always reach you.
             </span>
           ) : (
             <a className="underline" href={PREFS_HREF}>
@@ -568,7 +568,7 @@ function VariantD({ e }: { e: EmailCopy }) {
             <div className="font-semibold text-zinc-600">Your emails</div>
             {e.mandatory ? (
               <span className="inline-flex items-center gap-1">
-                <Lock className="size-3" /> Refund decisions always email you.
+                <Lock className="size-3" /> Emails about your refund requests always reach you.
               </span>
             ) : (
               <a className="underline" href={PREFS_HREF}>
