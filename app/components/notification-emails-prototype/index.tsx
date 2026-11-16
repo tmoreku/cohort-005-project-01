@@ -18,6 +18,7 @@ import type { EmailSeed } from "./data.server";
 // ─── Shared copy model ───
 
 type Kind =
+  | "refund_received"
   | "refund_opened"
   | "refund_approved"
   | "refund_declined"
@@ -37,6 +38,7 @@ interface EmailCopy {
   kindLabel: string; // eyebrow, also the Notification Preferences row name
   to: string;
   subject: string;
+  feedTitle: string; // the Notification title in the Feed / push; also the email headline
   preheader: string;
   greetingName: string;
   lead: string[];
@@ -47,6 +49,7 @@ interface EmailCopy {
   mandatory: boolean;
   why: string; // "You're getting this because…"
   defaultOff?: boolean;
+  channelsUndecided?: boolean;
 }
 
 interface Options {
@@ -101,10 +104,35 @@ function buildEmails(seed: EmailSeed, o: Options): EmailCopy[] {
 
   return [
     {
+      kind: "refund_received",
+      kindLabel: "Refund request received",
+      to: "the buyer",
+      subject: `Refund request received: ${course.title}`,
+      feedTitle: `We've got your refund request for ${course.title}`,
+      preheader: `A Platform Admin will look at it and email you the decision.`,
+      greetingName: seed.buyer.name.split(" ")[0],
+      lead: [
+        end(`We've got your refund request for ${course.title}`),
+        `If it's approved, you'll get back ${paid}, the full amount you paid. A Platform Admin reviews every request by hand and we'll email you the decision. You don't need to do anything else.`,
+      ],
+      quotes: [{ label: "Your reason", text: reason, muted: true }],
+      after: ["You keep access to the course while we look at it."],
+      facts: [
+        ["Course", course.title],
+        ["Refund if approved", `${paid} (the full amount)`],
+        ["Requested", t(1)],
+      ],
+      cta: { label: `Go to ${course.title}`, href: `/courses/${course.slug}` },
+      mandatory: true,
+      channelsUndecided: true,
+      why: "You're getting this because you asked for a refund.",
+    },
+    {
       kind: "refund_opened",
       kindLabel: "Refund request opened",
       to: "Platform Admins",
-      subject: `${seed.buyer.name} asked for a refund on ${course.title}`,
+      subject: `Refund request: ${course.title} (${paid})`,
+      feedTitle: `${seed.buyer.name} asked for a refund on ${course.title}`,
       preheader: `${paid} · "${excerpt(reason, 70)}"`,
       greetingName: seed.admin.name.split(" ")[0],
       lead: [
@@ -127,7 +155,8 @@ function buildEmails(seed: EmailSeed, o: Options): EmailCopy[] {
       kind: "refund_approved",
       kindLabel: "Refund request approved",
       to: "the buyer",
-      subject: `Your refund request for ${course.title} was approved`,
+      subject: `Refund request approved: ${course.title}`,
+      feedTitle: `Your refund request for ${course.title} was approved`,
       preheader: `${paid}, the full amount you paid, is on its way back to you.`,
       greetingName: seed.buyer.name.split(" ")[0],
       lead: [
@@ -135,7 +164,7 @@ function buildEmails(seed: EmailSeed, o: Options): EmailCopy[] {
         `${paid}, the full amount you paid, is on its way back to you. Depending on your bank, it can take a few days to show.`,
       ],
       quotes: o.approvedNote
-        ? [{ label: "A note from the Cadence team", text: approveNote }]
+        ? [{ label: "Platform Admin", author: seed.admin.name, text: approveNote }]
         : [],
       after: [end(`You no longer have access to ${course.title}`)],
       facts: [
@@ -151,13 +180,14 @@ function buildEmails(seed: EmailSeed, o: Options): EmailCopy[] {
       kind: "refund_declined",
       kindLabel: "Refund request declined",
       to: "the buyer",
-      subject: `Your refund request for ${course.title} was declined`,
+      subject: `Refund request declined: ${course.title}`,
+      feedTitle: `Your refund request for ${course.title} was declined`,
       preheader: excerpt(declineNote, 90),
       greetingName: seed.buyer.name.split(" ")[0],
       lead: [
         `We've looked at your refund request for ${course.title} and decided not to refund it.`,
       ],
-      quotes: [{ label: "Why", text: declineNote }],
+      quotes: [{ label: "Platform Admin", author: seed.admin.name, text: declineNote }],
       after: [
         "You still have everything you bought. If something changes, you can ask again from the course page.",
       ],
@@ -173,7 +203,8 @@ function buildEmails(seed: EmailSeed, o: Options): EmailCopy[] {
       kind: "seat_claimed",
       kindLabel: "Seat claimed",
       to: "the Team Admin",
-      subject: `${seed.student.name} claimed a seat on ${course.title} (${used} of ${total} used)`,
+      subject: `Seat claimed on ${course.title} (${used} of ${total})`,
+      feedTitle: `${seed.student.name} claimed a seat on ${course.title} (${used} of ${total} used)`,
       preheader:
         used === total
           ? "That was the last Seat on this Team Licence."
@@ -202,7 +233,8 @@ function buildEmails(seed: EmailSeed, o: Options): EmailCopy[] {
       kind: "question_asked",
       kindLabel: "Discussion Question asked",
       to: "the Instructor",
-      subject: `${seed.student.name} asked a question on ${lesson.title}`,
+      subject: `Question from ${seed.student.name} on ${lesson.title}`,
+      feedTitle: `${seed.student.name} asked a question on ${lesson.title}`,
       preheader: excerpt(seed.question, 90),
       greetingName: seed.instructor.name.split(" ")[0],
       lead: [end(`${seed.student.name} asked a question on ${lesson.title} in ${course.title}`)],
@@ -227,7 +259,8 @@ function buildEmails(seed: EmailSeed, o: Options): EmailCopy[] {
       kind: "reply_posted",
       kindLabel: "Discussion Reply posted",
       to: "the question's author",
-      subject: `${seed.replier.name} replied to your question on ${lesson.title}`,
+      subject: `New reply to your question on ${lesson.title}`,
+      feedTitle: `${seed.replier.name} replied to your question on ${lesson.title}`,
       preheader: excerpt(seed.reply, 90),
       greetingName: seed.student.name.split(" ")[0],
       lead: [end(`${seed.replier.name} replied to your question on ${lesson.title}`)],
@@ -340,7 +373,7 @@ function VariantB({ e }: { e: EmailCopy }) {
           <div className="text-xs font-semibold tracking-wide text-indigo-600 uppercase">
             {e.kindLabel}
           </div>
-          <h1 className="mt-2 text-[22px] leading-snug font-semibold text-zinc-900">{e.subject}</h1>
+          <h1 className="mt-2 text-[22px] leading-snug font-semibold text-zinc-900">{e.feedTitle}</h1>
           <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-zinc-700">
             <p>Hi {e.greetingName},</p>
             {e.lead.map((l) => (
@@ -460,9 +493,99 @@ function VariantC({ e }: { e: EmailCopy }) {
   );
 }
 
+// ─── Variant D: B's header + C's facts table + C's footer ───
+// Feedback round 1: B's branded header and card, C's key/value table, C's
+// split footer (Notification Preferences link only; lock for mandatory).
+// Refund decision notes are signed by the deciding Platform Admin.
+function VariantD({ e }: { e: EmailCopy }) {
+  return (
+    <div className="bg-zinc-100 px-4 py-8 font-sans">
+      <div className="mx-auto max-w-[600px]">
+        <div className="flex items-center gap-2 px-2 pb-4">
+          <div className="flex size-7 items-center justify-center rounded-md bg-indigo-600 text-sm font-bold text-white">
+            C
+          </div>
+          <span className="text-lg font-semibold text-zinc-900">Cadence</span>
+        </div>
+        <div className="rounded-xl bg-white p-8 shadow-sm ring-1 ring-zinc-200">
+          <div className="text-xs font-semibold tracking-wide text-indigo-600 uppercase">
+            {e.kindLabel}
+          </div>
+          <h1 className="mt-2 text-[22px] leading-snug font-semibold text-zinc-900">{e.feedTitle}</h1>
+          <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-zinc-700">
+            <p>Hi {e.greetingName},</p>
+            {e.lead.map((l) => (
+              <p key={l}>{l}</p>
+            ))}
+          </div>
+          <table className="mt-5 w-full border-collapse text-[14px]">
+            <tbody>
+              {e.facts.map(([k, v]) => (
+                <tr key={k} className="border-b border-zinc-200">
+                  <td className="w-36 py-2 pr-4 align-top text-zinc-500">{k}</td>
+                  <td className="py-2 align-top text-zinc-800">{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {e.quotes.map((q) => (
+            <div
+              key={q.label}
+              className={`mt-5 rounded-lg p-4 ${q.muted ? "bg-zinc-50 text-zinc-500" : "bg-indigo-50/60 text-zinc-800"}`}
+            >
+              <div className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500">
+                {q.author && (
+                  <span className="flex size-5 items-center justify-center rounded-full bg-indigo-200 text-[10px] font-bold text-indigo-800">
+                    {q.author[0]}
+                  </span>
+                )}
+                {q.author ?? q.label}
+                {q.author && <span className="text-zinc-400">· {q.label}</span>}
+              </div>
+              <Md text={q.text} className="text-[14px] leading-relaxed" />
+            </div>
+          ))}
+          {e.after.length > 0 && (
+            <div className="mt-5 space-y-3 text-[15px] leading-relaxed text-zinc-700">
+              {e.after.map((l) => (
+                <p key={l}>{l}</p>
+              ))}
+            </div>
+          )}
+          <a
+            href={e.cta.href}
+            className="mt-7 inline-block rounded-lg bg-indigo-600 px-5 py-3 text-[15px] font-semibold text-white"
+          >
+            {e.cta.label}
+          </a>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-4 px-6 text-[11px] leading-relaxed text-zinc-500">
+          <div>
+            <div className="font-semibold text-zinc-600">Why you got this</div>
+            {e.why}
+          </div>
+          <div>
+            <div className="font-semibold text-zinc-600">Your emails</div>
+            {e.mandatory ? (
+              <span className="inline-flex items-center gap-1">
+                <Lock className="size-3" /> Refund decisions always email you.
+              </span>
+            ) : (
+              <a className="underline" href={PREFS_HREF}>
+                Notification Preferences
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Shell: fake inbox + switcher ───
 
 const VARIANTS = [
+  { key: "D", name: "B header + C facts", C: VariantD },
   { key: "A", name: "Plain note", C: VariantA },
   { key: "B", name: "Branded card", C: VariantB },
   { key: "C", name: "Fact sheet", C: VariantC },
@@ -505,6 +628,7 @@ export function NotificationEmailsPrototype({ seed }: { seed: EmailSeed }) {
                 <div className="truncate text-xs text-zinc-500">{e.preheader}</div>
                 <div className="mt-1 flex gap-1 text-[10px]">
                   {e.mandatory && <span className="rounded bg-amber-100 px-1 text-amber-800">mandatory</span>}
+                  {e.channelsUndecided && <span className="rounded bg-rose-100 px-1 text-rose-800">new · channels undecided</span>}
                   {e.defaultOff && <span className="rounded bg-zinc-200 px-1 text-zinc-700">off by default</span>}
                 </div>
               </button>
@@ -516,11 +640,6 @@ export function NotificationEmailsPrototype({ seed }: { seed: EmailSeed }) {
           <Toggle label="Recipient timezone known (else UTC)" on={opts.tzKnown} set={(v) => setOpts({ ...opts, tzKnown: v })} />
           <Toggle label="Approval has a decision note" on={opts.approvedNote} set={(v) => setOpts({ ...opts, approvedNote: v })} />
           <Toggle label="Seat claimed was the last Seat" on={opts.lastSeat} set={(v) => setOpts({ ...opts, lastSeat: v })} />
-        </div>
-        <div className="border-t bg-amber-50 p-4 text-[11px] leading-relaxed text-amber-900">
-          <b>Open question:</b> today the buyer also gets a "Refund requested — {seed.course.title}" confirmation
-          email when they ask (<code>raiseRefundRequest</code>). It isn't one of the six Notifications. Keep it,
-          move it into Knock as a 7th, or drop it?
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto pb-24">
