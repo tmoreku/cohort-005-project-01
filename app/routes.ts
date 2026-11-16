@@ -48,6 +48,8 @@ export default [
     route("team", "routes/team.tsx"),
     route("redeem/:code", "routes/redeem.$code.tsx"),
   ]),
+  // PROTOTYPE (throwaway), wayfinder ticket #18
+  route("prototype/notification-emails", "routes/prototype.notification-emails.tsx"),
   route("signup", "routes/signup.tsx"),
   route("login", "routes/login.tsx"),
   route("api/switch-user", "routes/api.switch-user.ts"),
