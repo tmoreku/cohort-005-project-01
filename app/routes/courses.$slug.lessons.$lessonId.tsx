@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
+import { PushContextualAsk } from "~/components/push-permission-prototype";
 import { toast } from "sonner";
 import type { Route } from "./+types/courses.$slug.lessons.$lessonId";
 import { getCurrentUserId } from "~/lib/session";
@@ -1250,6 +1251,8 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
               instructorName={instructorName}
             />
           )}
+          {/* PROTOTYPE (push permission, ticket #16) */}
+          <PushContextualAsk context="discussion" />
 
           {/* Prev/Next Navigation */}
           <div className="flex items-center justify-between border-t pt-6">

@@ -70,6 +70,9 @@ function CommentForm({
 
     if (fetcher.data.ok) {
       if (intent === "create-comment") setBody("");
+      // PROTOTYPE (push permission, ticket #16): a top-level question was posted
+      if (intent === "create-comment" && parentId === undefined)
+        window.dispatchEvent(new Event("proto:question-asked"));
       onDone?.();
     }
     // onDone is recreated each render by callers; depending on it would loop.

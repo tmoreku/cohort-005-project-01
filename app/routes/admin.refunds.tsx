@@ -3,6 +3,7 @@ import { useFetcher, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Route } from "./+types/admin.refunds";
+import { PushContextualAsk } from "~/components/push-permission-prototype";
 import { getCurrentUserId } from "~/lib/session";
 import { parseFormData } from "~/lib/validation";
 import { RefundStatus, UserRole, users } from "~/db/schema";
@@ -164,6 +165,8 @@ export default function AdminRefunds({ loaderData }: Route.ComponentProps) {
           Approve or decline what buyers have asked for, oldest first.
         </p>
       </div>
+      {/* PROTOTYPE (push permission, ticket #16) */}
+      <PushContextualAsk context="admin-refunds" />
 
       <div className="mb-6 flex gap-2">
         {FILTERS.map((filter) => (

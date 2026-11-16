@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
+import { PushSettingsCard } from "~/components/push-permission-prototype";
 import { UserRole, RefundStatus, users } from "~/db/schema";
 import { AlertTriangle } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
@@ -187,6 +188,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </fetcher.Form>
         </CardContent>
       </Card>
+
+      {/* PROTOTYPE (push permission, ticket #16) */}
+      <PushSettingsCard />
 
       {refundRequests.length > 0 && (
         <Card className="mt-8 max-w-md">

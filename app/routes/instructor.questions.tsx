@@ -3,6 +3,7 @@ import { Link, data, isRouteErrorResponse, useFetcher } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Route } from "./+types/instructor.questions";
+import { PushContextualAsk } from "~/components/push-permission-prototype";
 import { requireInstructorOrAdmin, requireStaff } from "~/lib/access.server";
 import { renderComment } from "~/lib/comment-markdown.server";
 import { Button } from "~/components/ui/button";
@@ -369,6 +370,8 @@ export default function InstructorQuestions({
           Replying here marks them answered.
         </p>
       </div>
+      {/* PROTOTYPE (push permission, ticket #16) */}
+      <PushContextualAsk context="instructor-questions" />
 
       {questions.length === 0 ? (
         <Card>

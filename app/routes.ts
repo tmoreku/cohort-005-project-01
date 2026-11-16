@@ -54,4 +54,6 @@ export default [
   route("api/logout", "routes/api.logout.ts"),
   route("api/video-tracking", "routes/api.video-tracking.ts"),
   route("api/set-dev-country", "routes/api.set-dev-country.ts"),
+  // PROTOTYPE (push permission, ticket #16)
+  route("api/prototype-push", "routes/api.prototype-push.ts"),
 ] satisfies RouteConfig;
