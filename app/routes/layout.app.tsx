@@ -3,6 +3,14 @@ import type { Route } from "./+types/layout.app";
 import { Sidebar } from "~/components/sidebar";
 import { DevUI } from "~/components/dev-ui";
 import { Toaster } from "sonner";
+// PROTOTYPE (notification feed, ticket #11)
+import {
+  NotificationFeedPrototype,
+  PrototypeHeaderSlot,
+  PrototypeNavSlot,
+  usePrototypeInboxPage,
+} from "~/components/notification-feed-prototype";
+import { getPrototypeNotifications } from "~/components/notification-feed-prototype/data.server";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
 import { eq, and, or, sql, desc } from "drizzle-orm";
@@ -213,10 +221,33 @@ export async function loader({ request }: Route.LoaderArgs) {
     countryTierInfo,
     countries: COUNTRIES,
     isTeamAdmin: currentUserId ? isTeamAdmin(currentUserId) : false,
+    // PROTOTYPE (notification feed, ticket #11)
+    protoNotifications: currentUser
+      ? getPrototypeNotifications(
+          currentUser.role,
+          isTeamAdmin(currentUser.id)
+        )
+      : { initial: [], incoming: [] },
   };
 }
 
 export default function AppLayout({ loaderData }: Route.ComponentProps) {
+  return (
+    <NotificationFeedPrototype
+      initial={loaderData.protoNotifications.initial}
+      incoming={loaderData.protoNotifications.incoming}
+    >
+      <AppLayoutInner loaderData={loaderData} />
+    </NotificationFeedPrototype>
+  );
+}
+
+function AppLayoutInner({
+  loaderData,
+}: {
+  loaderData: Route.ComponentProps["loaderData"];
+}) {
+  const inboxPage = usePrototypeInboxPage();
   const {
     users,
     currentUser,
@@ -233,9 +264,11 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         currentUser={currentUser}
         recentCourses={recentCourses}
         isTeamAdmin={userIsTeamAdmin}
+        headerSlot={<PrototypeHeaderSlot />}
+        navSlot={<PrototypeNavSlot />}
       />
       <main className="flex-1 overflow-y-auto">
-        <Outlet />
+        {inboxPage ?? <Outlet />}
       </main>
       <DevUI
         users={users}
