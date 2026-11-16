@@ -57,6 +57,7 @@ interface Ctx {
   sendLocalTest: () => void;
   dismissedAt: number | null;
   dismiss: () => void;
+  neverAsk: () => void;
   resetDismiss: () => void;
 }
 
@@ -128,7 +129,7 @@ export function PushPrototypeProvider({
   useEffect(() => {
     setVariantState((ls.get("proto-push-variant") as Variant) ?? "A");
     setSimulatedState((ls.get("proto-push-sim") as PushState) || null);
-    setDismissedAt(Number(ls.get("proto-push-dismissed")) || null);
+    setDismissedAt(ls.get("proto-push-dismissed") === "never" ? Infinity : Number(ls.get("proto-push-dismissed")) || null);
   }, []);
 
   const setVariant = (v: Variant) => {
@@ -292,7 +293,12 @@ export function PushPrototypeProvider({
     const now = Date.now();
     ls.set("proto-push-dismissed", String(now));
     setDismissedAt(now);
-    say("ask dismissed: hidden for 30 days");
+    say("Not now: ask rests for 30 days");
+  };
+  const neverAsk = () => {
+    ls.set("proto-push-dismissed", "never");
+    setDismissedAt(Infinity);
+    say("Don't ask again: ask hidden for good (Settings card still works)");
   };
   const resetDismiss = () => {
     ls.set("proto-push-dismissed", null);
@@ -322,6 +328,7 @@ export function PushPrototypeProvider({
         sendLocalTest,
         dismissedAt,
         dismiss,
+        neverAsk,
         resetDismiss,
       }}
     >
@@ -467,6 +474,7 @@ export function PushFeedSlot() {
                 <div className="mt-3 flex gap-2">
                   <Button size="sm" onClick={p.turnOn} disabled={p.busy}>Turn on</Button>
                   <Button size="sm" variant="ghost" onClick={p.dismiss}>Not now</Button>
+                  <Button size="sm" variant="ghost" onClick={p.neverAsk}>Don&apos;t ask again</Button>
                 </div>
               </div>
             )}
@@ -524,7 +532,8 @@ export function PushContextualAsk({ context }: { context: keyof typeof CONTEXT_C
         <p className="text-sm text-muted-foreground">{copy.body}</p>
       </div>
       <Button size="sm" onClick={p.turnOn} disabled={p.busy}>{copy.cta}</Button>
-      <Button size="sm" variant="ghost" onClick={p.dismiss}>No thanks</Button>
+      <Button size="sm" variant="ghost" onClick={p.dismiss}>Not now</Button>
+      <Button size="sm" variant="ghost" onClick={p.neverAsk}>Don&apos;t ask again</Button>
     </div>
   );
 }

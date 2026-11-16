@@ -50,9 +50,12 @@ export function detectPushState(f: BrowserFacts): PushState {
 
 // Should a proactive ask (Feed banner, contextual card) show at all?
 // Only when one click could actually turn push on.
+// dismissedAt = Infinity means "Don't ask again" (hidden for good);
+// a timestamp means "Not now" (resting for 30 days).
 export function canAskProactively(state: PushState, dismissedAt: number | null, now: number) {
   if (state !== "not-asked") return false;
   if (dismissedAt === null) return true;
+  if (dismissedAt === Infinity) return false;
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   return now - dismissedAt > THIRTY_DAYS;
 }
