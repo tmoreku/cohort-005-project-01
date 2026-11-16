@@ -93,16 +93,6 @@ A Refund where the money couldn't be sent. The Refund Request stays approved, be
 The amount of Watched time on a course past which a Student can no longer get a Refund, because they've had the course.
 _Avoid_: Watch cap, Viewing threshold
 
-### Discussions
-
-**Discussion Question**:
-Something a Student asks under a lesson, for the course's Instructor or a Platform Admin to answer.
-_Avoid_: Question (on its own), Comment, Thread, Post
-
-**Discussion Reply**:
-A response posted under a Discussion Question. Anyone who can see the Discussion Question can post a Discussion Reply, and a Discussion Reply can't itself be replied to.
-_Avoid_: Reply (on its own), Answer, Comment
-
 ### Notifications
 
 **Notification**:
@@ -112,11 +102,3 @@ _Avoid_: Alert, Message, Activity
 **Notification Feed**:
 The place inside Cadence where a person sees their Notifications.
 _Avoid_: Inbox, Activity feed
-
-**Notification Channel**:
-A way a Notification reaches a person: the Notification Feed, email, or push to their browser.
-_Avoid_: Medium, Transport
-
-**Notification Preference**:
-A person's choice to receive, or not, one kind of Notification on one Notification Channel.
-_Avoid_: Subscription, Opt-in, Settings
