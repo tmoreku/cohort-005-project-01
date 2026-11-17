@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
+import { PushOffer } from "~/components/push-offer";
 import {
   RENEW_BEFORE_EXPIRY_MS,
   useKnockUserToken,
@@ -304,6 +305,7 @@ function FeedDrawer({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
+          <PushOffer place="feed" className="m-3" />
           {visible.length === 0 && <EmptyState />}
           <FeedGroup
             label="Today"

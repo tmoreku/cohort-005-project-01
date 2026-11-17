@@ -6,6 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
 import { UserAvatar } from "~/components/user-avatar";
+import { PushOffer } from "~/components/push-offer";
 import { cn, formatRelativeTime } from "~/lib/utils";
 import {
   MAX_COMMENT_LENGTH,
@@ -52,6 +53,7 @@ function CommentForm({
   submitLabel,
   autoFocus,
   onDone,
+  onPosted,
 }: {
   intent: "create-comment" | "edit-comment";
   parentId?: number;
@@ -61,6 +63,8 @@ function CommentForm({
   submitLabel: string;
   autoFocus?: boolean;
   onDone?: () => void;
+  // After a successful post (unlike onDone, adds no Cancel button).
+  onPosted?: () => void;
 }) {
   const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
   const [body, setBody] = useState(defaultValue ?? "");
@@ -76,9 +80,11 @@ function CommentForm({
 
     if (fetcher.data.ok) {
       if (intent === "create-comment") setBody("");
+      onPosted?.();
       onDone?.();
     }
-    // onDone is recreated each render by callers; depending on it would loop.
+    // onDone and onPosted are recreated each render by callers; depending on
+    // them would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.state, fetcher.data, intent]);
 
@@ -385,6 +391,7 @@ export function CommentThread({
   canModerate,
   canPost,
   instructorName,
+  offerPushAfterQuestion = false,
 }: {
   comments: RenderedComment[];
   currentUserId: number | null;
@@ -392,7 +399,11 @@ export function CommentThread({
   canModerate: boolean;
   canPost: boolean;
   instructorName: string;
+  /** Offer browser push once a Student has posted a Discussion Question. */
+  offerPushAfterQuestion?: boolean;
 }) {
+  const [questionPosted, setQuestionPosted] = useState(false);
+
   return (
     <Card className="mb-8">
       <CardContent className="p-6">
@@ -428,10 +439,14 @@ export function CommentThread({
 
         {canPost && (
           <div className="mt-6 border-t pt-6">
+            {offerPushAfterQuestion && questionPosted && (
+              <PushOffer place="discussion-question" className="mb-4" />
+            )}
             <CommentForm
               intent="create-comment"
               placeholder="Ask a question or share what you found..."
               submitLabel="Post comment"
+              onPosted={() => setQuestionPosted(true)}
             />
           </div>
         )}

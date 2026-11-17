@@ -1174,6 +1174,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
               canModerate={canModerate}
               canPost
               instructorName={instructorName}
+              offerPushAfterQuestion={!canModerate}
             />
           )}
 

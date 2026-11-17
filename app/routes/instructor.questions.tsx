@@ -10,6 +10,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
 import { UserAvatar } from "~/components/user-avatar";
+import { PushOffer } from "~/components/push-offer";
 import { AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react";
 import { cn, daysSince, formatRelativeTime } from "~/lib/utils";
 import {
@@ -337,6 +338,9 @@ export default function InstructorQuestions({
           Replying here marks them answered.
         </p>
       </div>
+
+      {/* For Instructors: they're the ones told about new questions. */}
+      {!isAdmin && <PushOffer place="unanswered-questions" className="mb-6" />}
 
       {questions.length === 0 ? (
         <Card>

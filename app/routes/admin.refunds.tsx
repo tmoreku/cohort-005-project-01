@@ -10,6 +10,7 @@ import { db } from "~/db";
 import { eq } from "drizzle-orm";
 import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
+import { PushOffer } from "~/components/push-offer";
 import { Textarea } from "~/components/ui/textarea";
 import { AlertTriangle, Receipt } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
@@ -187,6 +188,8 @@ export default function AdminRefunds({ loaderData }: Route.ComponentProps) {
           Approve or decline what buyers have asked for, oldest first.
         </p>
       </div>
+
+      <PushOffer place="refund-requests" className="mb-6" />
 
       <div className="mb-6 flex gap-2">
         {FILTERS.map((filter) => (
