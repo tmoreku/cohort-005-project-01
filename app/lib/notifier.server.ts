@@ -185,6 +185,39 @@ const defaultNotifier = createNotifier({
   devEmailTo: process.env.DEV_EMAIL_TO,
 });
 
+// Creates or updates the person in Knock. Triggers carry recipients inline,
+// so this is only needed before the browser talks to Knock as the person
+// (Notification Preferences, push registration), which needs them to exist.
+// Without KNOCK_SECRET_API_KEY it does nothing.
+export async function upsertKnockRecipient(
+  user: RecipientUser,
+  config: Omit<NotifierConfig, "localDirectory"> = {
+    knockSecretApiKey: process.env.KNOCK_SECRET_API_KEY,
+    production: process.env.NODE_ENV === "production",
+    devEmailTo: process.env.DEV_EMAIL_TO,
+  }
+): Promise<void> {
+  if (!config.knockSecretApiKey) return;
+  const { id, ...properties } = toKnockRecipient(user, config);
+
+  const response = await fetch(
+    `${KNOCK_API_URL}/users/${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.knockSecretApiKey}`,
+      },
+      body: JSON.stringify(properties),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Knock rejected the user upsert: ${response.status}`);
+  }
+}
+
 export async function sendNotification(
   notification: NotificationToSend,
   notifier: Notifier = defaultNotifier
