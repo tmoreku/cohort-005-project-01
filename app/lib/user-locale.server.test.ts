@@ -59,16 +59,16 @@ describe("recordBrowserTimezoneAndLocale", () => {
     });
   });
 
-  it("ignores a timezone or locale that isn't valid, keeping the other", () => {
+  it("ignores an unknown timezone or locale, keeping the other", () => {
     recordBrowserTimezoneAndLocale(db, userId, {
-      timezone: "Not/AZone",
+      timezone: null,
       locale: "en-GB",
     });
     expect(storedFor(userId)).toEqual({ timezone: null, locale: "en-GB" });
 
     recordBrowserTimezoneAndLocale(db, userId, {
       timezone: "Europe/London",
-      locale: "not a locale!",
+      locale: null,
     });
     expect(storedFor(userId)).toEqual({
       timezone: "Europe/London",

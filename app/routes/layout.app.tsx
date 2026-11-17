@@ -5,7 +5,7 @@ import { DevUI } from "~/components/dev-ui";
 import { Toaster } from "sonner";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
-import { useBrowserTimezoneAndLocale } from "~/lib/use-browser-locale";
+import { useBrowserTimezoneAndLocale } from "~/lib/use-browser-timezone-and-locale";
 import { useHighlightOnArrival } from "~/lib/use-highlight-on-arrival";
 import { eq, and, or, sql, desc } from "drizzle-orm";
 import { db } from "~/db";
