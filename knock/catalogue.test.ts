@@ -12,6 +12,7 @@ const workflowSchema = z.object({
     .object({ override_preferences: z.boolean() })
     .partial()
     .optional(),
+  trigger_data_json_schema: z.object({ required: z.array(z.string()) }),
   steps: z.array(
     z.object({
       channel_type: z.string(),
@@ -33,6 +34,23 @@ function readWorkflow(key: string) {
   );
 }
 
+// Sample trigger data the Knock CLI wizard sends to check the emails.
+const samples = z
+  .array(
+    z.object({
+      workflow: z.string(),
+      data: z.record(z.unknown()),
+    })
+  )
+  .parse(
+    JSON.parse(
+      readFileSync(
+        new URL("../scripts/knock-samples.json", import.meta.url),
+        "utf8"
+      )
+    )
+  );
+
 describe("Knock workflows", () => {
   it("has one workflow per Notification kind and no others", () => {
     const dirs = readdirSync(workflowsDir).sort();
@@ -43,6 +61,14 @@ describe("Knock workflows", () => {
   for (const kind of NOTIFICATION_CATALOGUE) {
     describe(kind.workflowKey, () => {
       const workflow = readWorkflow(kind.workflowKey);
+
+      it("has a sample with every field its trigger data requires", () => {
+        const sample = samples.find((s) => s.workflow === kind.workflowKey);
+        const missing = workflow.trigger_data_json_schema.required.filter(
+          (field) => !(field in (sample?.data ?? {}))
+        );
+        expect(missing).toEqual([]);
+      });
 
       it("uses the catalogue's channels", () => {
         const expected = [

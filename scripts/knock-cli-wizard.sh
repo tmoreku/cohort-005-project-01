@@ -200,7 +200,7 @@ finish() {
 
 run_wizard() {
 
-TOTAL_STAGES=6
+TOTAL_STAGES=8
 KNOCK_DASHBOARD="https://dashboard.knock.app"
 KNOCK_CLI=(npx --yes @knocklabs/cli@latest)
 
@@ -284,6 +284,51 @@ step "If KNOCK_SIGNING_KEY isn't in .env yet, generate a signing key on the same
 step "and paste it into .env as KNOCK_SIGNING_KEY (the PEM or its base64 form)."
 warn "Do the same in Production when the Feed ships there."
 pause "Press Enter once Enhanced security mode is on."
+
+# ── Stage 7 ───────────────────────────────────────────────────────────────
+stage "Development email: DEV_EMAIL_TO"
+say "In development every user's Notification email goes to this one address."
+say "Development sends from onboarding@resend.dev, which Resend only delivers to"
+say "the address your Resend account signed up with, so use that address."
+ask DEV_EMAIL_TO "Your Resend account's email address:" || true
+if [[ -n "${DEV_EMAIL_TO:-}" ]]; then
+  write_env DEV_EMAIL_TO "$DEV_EMAIL_TO"
+else
+  SKIPPED+=("DEV_EMAIL_TO in .env (without it, development sends no Notification emails)")
+fi
+
+# ── Stage 8 ───────────────────────────────────────────────────────────────
+stage "Knock: push the workflows and check the emails arrive"
+if [[ -z "${DEV_EMAIL_TO:-}" ]]; then
+  warn "Skipped: needs DEV_EMAIL_TO from the previous stage."
+  SKIPPED+=("Email check: re-run the wizard once DEV_EMAIL_TO is set")
+else
+  say "Pushing knock/ to Knock Development, then sending each workflow once with"
+  say "sample data to $DEV_EMAIL_TO."
+  if KNOCK_SERVICE_TOKEN="$KNOCK_SERVICE_TOKEN" npm run --silent knock:push; then
+    recipients=$(DEV_EMAIL_TO="$DEV_EMAIL_TO" node -e \
+      'console.log(JSON.stringify([{ id: "wizard-email-check", name: "Wizard Check", email: process.env.DEV_EMAIL_TO }]))')
+    while IFS=$'\t' read -r workflow actor data; do
+      KNOCK_SERVICE_TOKEN="$KNOCK_SERVICE_TOKEN" "${KNOCK_CLI[@]}" workflow run "$workflow" \
+        --environment development --recipients "$recipients" --actor "$actor" --data "$data" >/dev/null \
+        && note "sent $workflow" || warn "couldn't run $workflow"
+    done < <(node -e '
+      for (const s of require("./scripts/knock-samples.json"))
+        console.log([s.workflow, JSON.stringify(s.actor), JSON.stringify(s.data)].join("\t"));')
+    step "Check $DEV_EMAIL_TO: six emails from 'Cadence (dev)' should arrive."
+    step "Seat claimed sends no email: it is off by default. That is expected."
+    step "Each has a grey page, the Cadence logo, a white card with one button,"
+    step "and a two-column footer: 'Why you got this' and 'Your emails'."
+    step "The three refund emails show a lock: 'Emails about your refund requests always reach you.'"
+    note "Nothing arrived? In Knock (Development) open Logs → Messages. 'Identity not found'"
+    note "means the From domain isn't verified in Resend."
+    confirm "Did the six emails arrive and look right?" \
+      || SKIPPED+=("Notification emails didn't arrive or looked wrong: check Knock Development's message logs")
+  else
+    warn "npm run knock:push failed. Check KNOCK_SERVICE_TOKEN and that node_modules is installed."
+    SKIPPED+=("npm run knock:push failed: fix it and re-run the wizard")
+  fi
+fi
 
 finish
 }

@@ -1,11 +1,12 @@
 // The seven kinds of Notification and the Notification Channels each one uses
 // (spec #21, "Notification catalogue"). One Knock workflow per kind; the
 // workflow files live in knock/workflows/<workflowKey>/.
+import type { NotificationKind } from "./notifier.server";
 
 export type EmailDefault = "on" | "off" | "mandatory";
 
-export type NotificationKind = {
-  workflowKey: string;
+export type CatalogueEntry = {
+  workflowKey: NotificationKind;
   name: string;
   feed: boolean;
   email: EmailDefault;
@@ -62,7 +63,7 @@ export const NOTIFICATION_CATALOGUE = [
     email: "on",
     push: true,
   },
-] as const satisfies readonly NotificationKind[];
+] as const satisfies readonly CatalogueEntry[];
 
 type ChannelTypeDefaults = { email: boolean; push?: boolean };
 
