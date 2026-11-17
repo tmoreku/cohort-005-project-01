@@ -15,6 +15,7 @@ import {
   videoWatchEvents,
   LessonProgressStatus,
   RefundStatus,
+  UserRole,
 } from "~/db/schema";
 import { formatPrice } from "~/lib/utils";
 import type {
@@ -407,6 +408,22 @@ function getCourse(db: Queryable, courseId: number) {
   return db.select().from(courses).where(eq(courses.id, courseId)).get();
 }
 
+/** Where a Platform Admin reviews one Refund Request. */
+export function adminRefundRequestUrl(refundRequestId: number): string {
+  return `/admin/refunds?request=${refundRequestId}`;
+}
+
+/** Every Platform Admin except the one who acted, oldest account first. */
+function getPlatformAdminsExcept(db: Queryable, actorId: number): User[] {
+  return db
+    .select()
+    .from(users)
+    .where(eq(users.role, UserRole.Admin))
+    .orderBy(asc(users.id))
+    .all()
+    .filter((user) => user.id !== actorId);
+}
+
 export type RaiseResult =
   | {
       ok: true;
@@ -447,6 +464,32 @@ export function raiseRefundRequest(
     .get();
 
   const kind = kindOf(getSeats(db, purchase.id));
+  const amount = formatPrice(purchase.amountPaid);
+
+  // Every Platform Admin hears about it, except the buyer if they are one.
+  const platformAdmins = getPlatformAdminsExcept(db, buyer.id);
+  const opened: NotificationToSend[] =
+    platformAdmins.length === 0
+      ? []
+      : [
+          {
+            kind: "refund-request-opened",
+            recipients: platformAdmins.map(toRecipient),
+            actor: toActor(buyer),
+            url: adminRefundRequestUrl(refundRequest.id),
+            data: {
+              buyerName: buyer.name,
+              buyerEmail: buyer.email,
+              courseTitle: course.title,
+              amount,
+              purchaseType:
+                kind === "team_licence" ? "Team Licence" : "Individual Purchase",
+              reason,
+              boughtAt: purchase.createdAt,
+              requestedAt,
+            },
+          },
+        ];
 
   return {
     ok: true,
@@ -461,11 +504,12 @@ export function raiseRefundRequest(
         url: buyerRefundRequestUrl(kind, refundRequest.id, purchase.id),
         data: {
           courseTitle: course.title,
-          amount: formatPrice(purchase.amountPaid),
+          amount,
           reason,
           requestedAt,
         },
       },
+      ...opened,
     ],
   };
 }
@@ -495,6 +539,22 @@ function selectRefundRequests(db: Queryable) {
     .innerJoin(courses, eq(purchases.courseId, courses.id))
     .innerJoin(users, eq(purchases.userId, users.id))
     .leftJoin(deciders, eq(refunds.resolvedByUserId, deciders.id));
+}
+
+/**
+ * The status a Refund Request has now, so a link to it opens the tab it is
+ * on, even if another Platform Admin decided it since the link was sent.
+ */
+export function findRefundRequestStatus(
+  db: Queryable,
+  refundRequestId: number
+): RefundStatus | null {
+  const row = db
+    .select({ status: refunds.status })
+    .from(refunds)
+    .where(eq(refunds.id, refundRequestId))
+    .get();
+  return row?.status ?? null;
 }
 
 export type RefundRequestForReview = {

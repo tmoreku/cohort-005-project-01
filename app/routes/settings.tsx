@@ -62,7 +62,13 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw data("User not found.", { status: 404 });
   }
 
-  const refundRequests = listRefundRequestsForBuyer(db, currentUserId);
+  // Ids are built here: refunds.server can't be imported by the component.
+  const refundRequests = listRefundRequestsForBuyer(db, currentUserId).map(
+    (refundRequest) => ({
+      ...refundRequest,
+      elementId: refundRequestElementId(refundRequest.id),
+    })
+  );
 
   const preferenceRows = preferenceRowsFor({
     role: currentUser.role,
@@ -243,7 +249,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
             {refundRequests.map((refundRequest) => (
               <div
                 key={refundRequest.id}
-                id={refundRequestElementId(refundRequest.id)}
+                id={refundRequest.elementId}
                 className="rounded-md border p-3"
               >
                 <div className="flex items-start justify-between gap-3">

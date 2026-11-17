@@ -168,7 +168,10 @@ export async function loader({ request }: Route.LoaderArgs) {
     };
   });
 
-  const teamLicences = listTeamLicences(db, currentUserId, new Date());
+  // Ids are built here: refunds.server can't be imported by the component.
+  const teamLicences = listTeamLicences(db, currentUserId, new Date()).map(
+    (licence) => ({ ...licence, cardId: teamLicenceCardId(licence.purchaseId) })
+  );
 
   const search = teamSearchSchema.safeParse({
     course: new URL(request.url).searchParams.get("course") ?? undefined,
@@ -403,7 +406,7 @@ function TeamLicenceRow({ licence }: { licence: TeamLicence }) {
   }, [fetcher.state, fetcher.data]);
 
   return (
-    <Card id={teamLicenceCardId(licence.purchaseId)}>
+    <Card id={licence.cardId}>
       <CardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

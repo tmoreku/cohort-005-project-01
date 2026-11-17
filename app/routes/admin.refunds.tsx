@@ -17,15 +17,21 @@ import { formatPrice } from "~/lib/utils";
 import {
   approveRefundRequest,
   declineRefundRequest,
+  findRefundRequestStatus,
   listRefundRequestsForReview,
+  refundRequestElementId,
   type RefundRequestForReview,
 } from "~/lib/refunds.server";
-import { RULE_BREAK_LABELS } from "~/lib/refund-rules";
+import { alreadyDecidedNotice, RULE_BREAK_LABELS } from "~/lib/refund-rules";
+import { useHighlightOnArrival } from "~/lib/use-highlight-on-arrival";
 import { sendNotification } from "~/lib/notifier.server";
 
 const refundFilterSchema = z
   .nativeEnum(RefundStatus)
   .catch(RefundStatus.Open);
+
+// `?request=<id>` is how a Refund Request opened Notification links here.
+const requestedIdSchema = z.coerce.number().int().positive().nullable().catch(null);
 
 const adminRefundActionSchema = z.discriminatedUnion("intent", [
   z.object({
@@ -83,11 +89,24 @@ export function meta() {
 export async function loader({ request, url }: Route.LoaderArgs) {
   await requirePlatformAdmin(request);
 
-  const status = refundFilterSchema.parse(url.searchParams.get("status"));
+  // A linked Refund Request opens on whichever tab it is on now, since
+  // another Platform Admin may have decided it after the link was sent.
+  const requestedId = requestedIdSchema.parse(url.searchParams.get("request"));
+  const requestedStatus =
+    requestedId === null ? null : findRefundRequestStatus(db, requestedId);
+  const status =
+    requestedStatus ??
+    refundFilterSchema.parse(url.searchParams.get("status"));
 
   return {
     status,
-    refundRequests: listRefundRequestsForReview(db, status, new Date()),
+    highlightedId: requestedStatus === null ? null : requestedId,
+    refundRequests: listRefundRequestsForReview(db, status, new Date()).map(
+      (refundRequest) => ({
+        ...refundRequest,
+        elementId: refundRequestElementId(refundRequest.id),
+      })
+    ),
   };
 }
 
@@ -145,8 +164,12 @@ const FILTERS: { status: RefundStatus; label: string }[] = [
 ];
 
 export default function AdminRefunds({ loaderData }: Route.ComponentProps) {
-  const { status, refundRequests } = loaderData;
+  const { status, highlightedId, refundRequests } = loaderData;
   const [, setSearchParams] = useSearchParams();
+  const highlighted = refundRequests.find(
+    (refundRequest) => refundRequest.id === highlightedId
+  );
+  useHighlightOnArrival(highlighted?.elementId ?? null);
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
@@ -199,6 +222,7 @@ export default function AdminRefunds({ loaderData }: Route.ComponentProps) {
             <RefundRequestCard
               key={refundRequest.id}
               refundRequest={refundRequest}
+              isLinked={refundRequest.id === highlightedId}
             />
           ))}
         </div>
@@ -261,8 +285,10 @@ function Figures({
 
 function RefundRequestCard({
   refundRequest,
+  isLinked,
 }: {
-  refundRequest: RefundRequestForReview;
+  refundRequest: RefundRequestForReview & { elementId: string };
+  isLinked: boolean;
 }) {
   const fetcher = useFetcher<
     { success: true; message: string } | { error: string }
@@ -270,6 +296,11 @@ function RefundRequestCard({
   const [note, setNote] = useState("");
   const isSubmitting = fetcher.state !== "idle";
   const isOpen = refundRequest.status === RefundStatus.Open;
+  const notice = isLinked
+    ? alreadyDecidedNotice(refundRequest, (iso) =>
+        new Date(iso).toLocaleDateString()
+      )
+    : null;
 
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data) return;
@@ -280,7 +311,14 @@ function RefundRequestCard({
     }
   }, [fetcher.state, fetcher.data]);
 
+  const [, setSearchParams] = useSearchParams();
+
   function decide(intent: "approve" | "decline") {
+    // Deciding the linked request yourself shouldn't send the page to its new
+    // tab with an "Already approved" notice, so the link is dropped first.
+    if (isLinked) {
+      setSearchParams({}, { replace: true, preventScrollReset: true });
+    }
     fetcher.submit(
       { intent, refundRequestId: String(refundRequest.id), note },
       { method: "post" }
@@ -288,8 +326,16 @@ function RefundRequestCard({
   }
 
   return (
-    <Card>
+    <Card id={refundRequest.elementId}>
       <CardContent className="space-y-4 p-5">
+        {notice && (
+          <p
+            role="status"
+            className="rounded-md bg-muted px-3 py-2 text-sm font-medium"
+          >
+            {notice}
+          </p>
+        )}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Link
