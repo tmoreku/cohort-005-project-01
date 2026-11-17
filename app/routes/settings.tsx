@@ -22,7 +22,10 @@ import { data, isRouteErrorResponse, Link } from "react-router";
 import { db } from "~/db";
 import { and, eq } from "drizzle-orm";
 import { formatPrice } from "~/lib/utils";
-import { listRefundRequestsForBuyer } from "~/lib/refunds.server";
+import {
+  listRefundRequestsForBuyer,
+  refundRequestElementId,
+} from "~/lib/refunds.server";
 import { getKnockUserAuth } from "~/lib/knock-token.server";
 import { upsertKnockRecipient } from "~/lib/notifier.server";
 import { preferenceRowsFor } from "~/lib/notification-preferences";
@@ -238,7 +241,11 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             {refundRequests.map((refundRequest) => (
-              <div key={refundRequest.id} className="rounded-md border p-3">
+              <div
+                key={refundRequest.id}
+                id={refundRequestElementId(refundRequest.id)}
+                className="rounded-md border p-3"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <Link
                     to={`/courses/${refundRequest.courseSlug}`}

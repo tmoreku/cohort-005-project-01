@@ -95,7 +95,7 @@ export function toKnockRecipient(
 const KNOCK_API_URL = "https://api.knock.app/v1";
 
 // Knock's trigger endpoint is one POST, so this calls it with fetch rather
-// than pulling in the Knock SDK — the same shape as the Postmark transport.
+// than pulling in the Knock SDK.
 export function knockNotifier(
   secretApiKey: string,
   recipientOptions: RecipientOptions

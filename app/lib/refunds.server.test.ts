@@ -237,6 +237,61 @@ describe("raising a Refund Request", () => {
   });
 });
 
+describe("the Refund request received Notification", () => {
+  it("is the buyer's receipt for an Individual Purchase, linking to Settings", () => {
+    const purchase = buyForSelf(base.user.id);
+
+    const result = raiseRefundRequest(
+      db,
+      purchase.id,
+      base.user.id,
+      "It was not what I expected.",
+      NOW
+    );
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notifications).toEqual([
+      {
+        kind: "refund-request-received",
+        recipients: [
+          {
+            id: base.user.id,
+            name: "Test User",
+            email: "test@example.com",
+            timezone: null,
+            locale: null,
+          },
+        ],
+        actor: { id: base.user.id, name: "Test User", avatarUrl: null },
+        url: `/settings#refund-request-${result.refundRequestId}`,
+        data: {
+          courseTitle: "Test Course",
+          amount: "$79.00",
+          reason: "It was not what I expected.",
+          requestedAt: NOW.toISOString(),
+        },
+      },
+    ]);
+  });
+
+  it("links a Team Licence to its card on Team", () => {
+    const priya = addLearner("Priya");
+    const { purchase } = buySeats(priya.id, 2);
+
+    const result = raiseRefundRequest(db, purchase.id, priya.id, "Too many.", NOW);
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notifications).toMatchObject([
+      {
+        kind: "refund-request-received",
+        recipients: [{ id: priya.id }],
+        url: `/team#team-licence-${purchase.id}`,
+        data: { amount: "$158.00" },
+      },
+    ]);
+  });
+});
+
 describe("the refund offer on the course page", () => {
   it("offers the newest Individual Purchase, not a newer Team Licence", () => {
     const individual = buyForSelf(base.user.id, 3);
@@ -356,16 +411,65 @@ describe("approving a Refund Request", () => {
     });
   });
 
-  it("emails the buyer that the refund is on its way", () => {
+  it("notifies the buyer, signed by the deciding Platform Admin", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+
+    const result = approveRefundRequest(
+      db,
+      id,
+      platformAdmin.id,
+      "Sorry it wasn't the right fit.",
+      NOW
+    );
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notification).toEqual({
+      kind: "refund-request-approved",
+      recipients: [
+        {
+          id: base.user.id,
+          name: "Test User",
+          email: "test@example.com",
+          timezone: null,
+          locale: null,
+        },
+      ],
+      actor: { id: platformAdmin.id, name: "Pat Admin", avatarUrl: null },
+      url: `/settings#refund-request-${id}`,
+      data: {
+        adminName: "Pat Admin",
+        courseTitle: "Test Course",
+        amount: "$79.00",
+        reason: "It was not what I expected.",
+        note: "Sorry it wasn't the right fit.",
+        decidedAt: NOW.toISOString(),
+      },
+    });
+  });
+
+  it("sends a null note when the Platform Admin wrote none", () => {
     const purchase = buyForSelf(base.user.id);
     const id = raise(purchase.id, base.user.id);
 
     const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
 
     if (!result.ok) throw new Error(result.error);
-    expect(result.email.to).toBe("test@example.com");
-    expect(result.email.subject).toBe("Refund approved — Test Course");
-    expect(result.email.body).toContain("$79.00");
+    expect(result.notification.data.note).toBeNull();
+  });
+
+  it("links a Team Licence's approval to its card on Team", () => {
+    const priya = addLearner("Priya");
+    const { purchase } = buySeats(priya.id, 1);
+    const id = raise(purchase.id, priya.id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notification).toMatchObject({
+      recipients: [{ id: priya.id }],
+      url: `/team#team-licence-${purchase.id}`,
+    });
   });
 });
 
@@ -393,9 +497,67 @@ describe("declining a Refund Request", () => {
     );
 
     if (!result.ok) throw new Error(result.error);
-    expect(result.email.body).toContain("You finished the course.");
     expect(isEnrolled(base.user.id)).toBe(true);
     expect(checkRefundRequest(db, purchase.id, base.user.id, NOW).ok).toBe(true);
+  });
+
+  it("notifies the buyer with the trimmed note, signed by the deciding Platform Admin", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+
+    const result = declineRefundRequest(
+      db,
+      id,
+      platformAdmin.id,
+      "  You finished the course.  ",
+      NOW
+    );
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notification).toEqual({
+      kind: "refund-request-declined",
+      recipients: [
+        {
+          id: base.user.id,
+          name: "Test User",
+          email: "test@example.com",
+          timezone: null,
+          locale: null,
+        },
+      ],
+      actor: { id: platformAdmin.id, name: "Pat Admin", avatarUrl: null },
+      url: `/settings#refund-request-${id}`,
+      data: {
+        adminName: "Pat Admin",
+        courseTitle: "Test Course",
+        amount: "$79.00",
+        reason: "It was not what I expected.",
+        note: "You finished the course.",
+        decidedAt: NOW.toISOString(),
+      },
+    });
+  });
+
+  it("links a Team Licence's decline to its card on Team", () => {
+    const priya = addLearner("Priya");
+    const { purchase } = buySeats(priya.id, 1);
+    const id = raise(purchase.id, priya.id);
+
+    const result = declineRefundRequest(
+      db,
+      id,
+      platformAdmin.id,
+      "Seats are in use.",
+      NOW
+    );
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notification).toMatchObject({
+      kind: "refund-request-declined",
+      recipients: [{ id: priya.id }],
+      actor: { id: platformAdmin.id },
+      url: `/team#team-licence-${purchase.id}`,
+    });
   });
 
   it("frees a Team Licence's Seats again", () => {

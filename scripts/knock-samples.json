@@ -44,7 +44,7 @@
     "workflow": "refund-request-declined",
     "actor": { "id": "1", "name": "Alex Admin" },
     "data": {
-      "url": "/team#refund-request-8",
+      "url": "/team#team-licence-5",
       "actor": { "id": 1, "name": "Alex Admin", "avatarUrl": null },
       "adminName": "Alex Admin",
       "courseTitle": "Full-Stack React Router",

@@ -23,6 +23,7 @@ import { eq, and } from "drizzle-orm";
 import {
   getSeatAvailability,
   listTeamLicences,
+  teamLicenceCardId,
   type SeatAvailability,
 } from "~/lib/refunds.server";
 import { formatPrice } from "~/lib/utils";
@@ -402,7 +403,7 @@ function TeamLicenceRow({ licence }: { licence: TeamLicence }) {
   }, [fetcher.state, fetcher.data]);
 
   return (
-    <Card>
+    <Card id={teamLicenceCardId(licence.purchaseId)}>
       <CardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

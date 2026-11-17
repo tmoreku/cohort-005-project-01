@@ -17,6 +17,11 @@ import {
   RefundStatus,
 } from "~/db/schema";
 import { formatPrice } from "~/lib/utils";
+import type {
+  NotificationActor,
+  NotificationToSend,
+  RecipientUser,
+} from "~/lib/notifier.server";
 import {
   REFUND_COMPLETION_LIMIT,
   REFUND_WATCH_LIMIT_SECONDS,
@@ -38,6 +43,7 @@ type Queryable = Db | Tx;
 
 type Purchase = typeof purchases.$inferSelect;
 type Seat = typeof coupons.$inferSelect;
+type RefundRequest = typeof refunds.$inferSelect;
 
 // ─── Calendar days ───
 
@@ -348,10 +354,66 @@ export function getRefundOffer(
   };
 }
 
-export type Email = { to: string; subject: string; body: string };
+// ─── Notifications ───
+// Raising and deciding a Refund Request return the Notifications to send; the
+// route hands them to the notifier. Field names match the Knock workflows'
+// trigger data (knock/workflows/refund-request-*).
+
+/** The stable id of a Team Licence's card on Team. */
+export function teamLicenceCardId(purchaseId: number): string {
+  return `team-licence-${purchaseId}`;
+}
+
+/** The stable id of a Refund Request in Settings. */
+export function refundRequestElementId(refundRequestId: number): string {
+  return `refund-request-${refundRequestId}`;
+}
+
+/**
+ * Where the buyer sees their Refund Request: in Settings for an Individual
+ * Purchase, or the licence's card on Team for a Team Licence.
+ */
+export function buyerRefundRequestUrl(
+  kind: PurchaseKind,
+  refundRequestId: number,
+  purchaseId: number
+): string {
+  return kind === "team_licence"
+    ? `/team#${teamLicenceCardId(purchaseId)}`
+    : `/settings#${refundRequestElementId(refundRequestId)}`;
+}
+
+type User = typeof users.$inferSelect;
+
+function toRecipient(user: User): RecipientUser {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    timezone: user.timezone,
+    locale: user.locale,
+  };
+}
+
+function toActor(user: User): NotificationActor {
+  return { id: user.id, name: user.name, avatarUrl: user.avatarUrl };
+}
+
+function getUser(db: Queryable, userId: number) {
+  return db.select().from(users).where(eq(users.id, userId)).get();
+}
+
+function getCourse(db: Queryable, courseId: number) {
+  return db.select().from(courses).where(eq(courses.id, courseId)).get();
+}
 
 export type RaiseResult =
-  | { ok: true; refundRequestId: number; kind: PurchaseKind; email: Email }
+  | {
+      ok: true;
+      refundRequestId: number;
+      kind: PurchaseKind;
+      notifications: NotificationToSend[];
+    }
   | Failure;
 
 export function raiseRefundRequest(
@@ -365,46 +427,46 @@ export function raiseRefundRequest(
   if (!check.ok) return check;
 
   const { purchase } = check;
-  const buyer = db.select().from(users).where(eq(users.id, buyerId)).get();
-  const course = db
-    .select()
-    .from(courses)
-    .where(eq(courses.id, purchase.courseId))
-    .get();
+  const buyer = getUser(db, buyerId);
+  const course = getCourse(db, purchase.courseId);
 
   if (!buyer || !course) {
     return { ok: false, status: 404, error: "Purchase not found." };
   }
 
+  const requestedAt = now.toISOString();
   const refundRequest = db
     .insert(refunds)
     .values({
       purchaseId: purchase.id,
       status: RefundStatus.Open,
       reason,
-      requestedAt: now.toISOString(),
+      requestedAt,
     })
     .returning()
     .get();
 
+  const kind = kindOf(getSeats(db, purchase.id));
+
   return {
     ok: true,
     refundRequestId: refundRequest.id,
-    kind: kindOf(getSeats(db, purchase.id)),
-    email: {
-      to: buyer.email,
-      subject: `Refund requested — ${course.title}`,
-      body: [
-        `Hi ${buyer.name},`,
-        "",
-        `We have your refund request for "${course.title}".`,
-        `The refund is for ${formatPrice(purchase.amountPaid)}, the amount you paid.`,
-        "",
-        "Our team reviews every refund request by hand. You do not need to do anything else — we will email you again when it is done.",
-        "",
-        "— The Cadence team",
-      ].join("\n"),
-    },
+    kind,
+    notifications: [
+      // The buyer's receipt: the one Notification that goes to its actor.
+      {
+        kind: "refund-request-received",
+        recipients: [toRecipient(buyer)],
+        actor: toActor(buyer),
+        url: buyerRefundRequestUrl(kind, refundRequest.id, purchase.id),
+        data: {
+          courseTitle: course.title,
+          amount: formatPrice(purchase.amountPaid),
+          reason,
+          requestedAt,
+        },
+      },
+    ],
   };
 }
 
@@ -568,12 +630,14 @@ export function listTeamLicences(db: Queryable, buyerId: number, now: Date) {
 
 // ─── Deciding a Refund Request ───
 
-export type DecisionResult = { ok: true; email: Email } | Failure;
+export type DecisionResult =
+  | { ok: true; notification: NotificationToSend }
+  | Failure;
 
 function findOpenRefundRequest(
   tx: Queryable,
   refundRequestId: number
-): { ok: true; purchase: Purchase } | Failure {
+): { ok: true; refundRequest: RefundRequest; purchase: Purchase } | Failure {
   const refundRequest = tx
     .select()
     .from(refunds)
@@ -599,7 +663,7 @@ function findOpenRefundRequest(
     return { ok: false, status: 404, error: "Purchase not found." };
   }
 
-  return { ok: true, purchase };
+  return { ok: true, refundRequest, purchase };
 }
 
 /**
@@ -679,7 +743,15 @@ export function approveRefundRequest(
 
     return {
       ok: true,
-      email: buildDecisionEmail(tx, purchase, RefundStatus.Approved, note),
+      notification: buildDecisionNotification(
+        tx,
+        found.refundRequest,
+        purchase,
+        platformAdminId,
+        RefundStatus.Approved,
+        note,
+        now
+      ),
     };
   });
 }
@@ -722,60 +794,63 @@ export function declineRefundRequest(
 
     return {
       ok: true,
-      email: buildDecisionEmail(
+      notification: buildDecisionNotification(
         tx,
+        found.refundRequest,
         found.purchase,
+        platformAdminId,
         RefundStatus.Declined,
-        trimmedNote
+        trimmedNote,
+        now
       ),
     };
   });
 }
 
-/** The email the buyer gets once their Refund Request is decided. */
-function buildDecisionEmail(
+/**
+ * The Notification the buyer gets once their Refund Request is decided. The
+ * actor is the deciding Platform Admin, whose name signs the note.
+ */
+function buildDecisionNotification(
   db: Queryable,
+  refundRequest: RefundRequest,
   purchase: Purchase,
+  platformAdminId: number,
   decision: RefundStatus.Approved | RefundStatus.Declined,
-  note: string | null
-): Email {
-  const buyer = db
-    .select()
-    .from(users)
-    .where(eq(users.id, purchase.userId))
-    .get();
-  const course = db
-    .select()
-    .from(courses)
-    .where(eq(courses.id, purchase.courseId))
-    .get();
+  note: string | null,
+  now: Date
+): NotificationToSend {
+  const buyer = getUser(db, purchase.userId);
+  const platformAdmin = getUser(db, platformAdminId);
+  const course = getCourse(db, purchase.courseId);
 
-  const courseTitle = course?.title ?? "your course";
-  const noteLines = note ? ["", note] : [];
-
-  const middle =
-    decision === RefundStatus.Approved
-      ? [
-          `We have approved your refund request for "${courseTitle}".`,
-          `${formatPrice(purchase.amountPaid)}, the full amount you paid, is on its way back to you.`,
-          ...noteLines,
-        ]
-      : [
-          `We have looked at your refund request for "${courseTitle}" and decided not to refund it.`,
-          ...noteLines,
-          "",
-          "You still have everything you bought. If something changes, you can raise a new refund request.",
-        ];
+  // The rows were read in the same transaction that decided the request, and
+  // users and courses are never deleted, so this can't happen.
+  if (!buyer || !platformAdmin || !course) {
+    throw new Error(
+      `Refund request ${refundRequest.id} lost its buyer, Platform Admin or course.`
+    );
+  }
 
   return {
-    to: buyer?.email ?? "",
-    subject: `Refund ${decision} — ${courseTitle}`,
-    body: [
-      `Hi ${buyer?.name ?? "there"},`,
-      "",
-      ...middle,
-      "",
-      "— The Cadence team",
-    ].join("\n"),
+    kind:
+      decision === RefundStatus.Approved
+        ? "refund-request-approved"
+        : "refund-request-declined",
+    recipients: [toRecipient(buyer)],
+    actor: toActor(platformAdmin),
+    url: buyerRefundRequestUrl(
+      kindOf(getSeats(db, purchase.id)),
+      refundRequest.id,
+      purchase.id
+    ),
+    data: {
+      adminName: platformAdmin.name,
+      courseTitle: course.title,
+      amount: formatPrice(purchase.amountPaid),
+      reason: refundRequest.reason,
+      note,
+      decidedAt: now.toISOString(),
+    },
   };
 }
