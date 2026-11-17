@@ -10,13 +10,23 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
-import { UserRole, RefundStatus, users } from "~/db/schema";
+import {
+  UserRole,
+  RefundStatus,
+  TeamMemberRole,
+  teamMembers,
+  users,
+} from "~/db/schema";
 import { AlertTriangle } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
 import { db } from "~/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { formatPrice } from "~/lib/utils";
 import { listRefundRequestsForBuyer } from "~/lib/refunds.server";
+import { getKnockUserAuth } from "~/lib/knock-token.server";
+import { upsertKnockRecipient } from "~/lib/notifier.server";
+import { preferenceRowsFor } from "~/lib/notification-preferences";
+import { NotificationPreferencesCard } from "~/components/notification-preferences";
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty."),
@@ -51,6 +61,19 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const refundRequests = listRefundRequestsForBuyer(db, currentUserId);
 
+  const preferenceRows = preferenceRowsFor({
+    role: currentUser.role,
+    isTeamAdmin: isTeamAdmin(currentUserId),
+  });
+  const knock = await getKnockUserAuth(currentUserId);
+  if (knock) {
+    // The browser reads and saves preferences as this person, so Knock must
+    // know them first. If this fails, the card says it couldn't load.
+    await upsertKnockRecipient(currentUser).catch((error: unknown) =>
+      console.error("Couldn't upsert the Knock recipient:", error)
+    );
+  }
+
   return {
     user: {
       id: currentUser.id,
@@ -60,7 +83,23 @@ export async function loader({ request }: Route.LoaderArgs) {
       role: currentUser.role,
     },
     refundRequests,
+    preferenceRows,
+    knock,
   };
+}
+
+function isTeamAdmin(userId: number): boolean {
+  const membership = db
+    .select({ id: teamMembers.id })
+    .from(teamMembers)
+    .where(
+      and(
+        eq(teamMembers.userId, userId),
+        eq(teamMembers.role, TeamMemberRole.Admin)
+      )
+    )
+    .get();
+  return membership !== undefined;
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -88,8 +127,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const { name, bio } = parsed.data;
 
-  db
-    .update(users)
+  db.update(users)
     .set({ name, email: currentUser.email, bio: bio || null })
     .where(eq(users.id, currentUser.id))
     .returning()
@@ -98,7 +136,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, refundRequests } = loaderData;
+  const { user, refundRequests, preferenceRows, knock } = loaderData;
   const openCount = refundRequests.filter(
     (refundRequest) => refundRequest.status === RefundStatus.Open
   ).length;
@@ -110,7 +148,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
       toast.success("Profile updated successfully.");
     }
     if (fetcher.state === "idle" && fetcher.data?.errors) {
-      const firstError = Object.values(fetcher.data.errors)[0] as string | undefined;
+      const firstError = Object.values(fetcher.data.errors)[0] as
+        string | undefined;
       if (firstError) toast.error(firstError);
     }
   }, [fetcher.state, fetcher.data]);
@@ -178,10 +217,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
                 </p>
               </div>
             )}
-            <Button
-              type="submit"
-              disabled={fetcher.state !== "idle"}
-            >
+            <Button type="submit" disabled={fetcher.state !== "idle"}>
               {fetcher.state !== "idle" ? "Saving..." : "Save Changes"}
             </Button>
           </fetcher.Form>
@@ -235,6 +271,13 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* #30 adds the Browser notifications card (#browser-notifications) just above. */}
+      <NotificationPreferencesCard
+        userId={user.id}
+        rows={preferenceRows}
+        knock={knock}
+      />
     </div>
   );
 }
@@ -283,12 +326,10 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
           : "Please select a user from the DevUI panel.";
     } else if (error.status === 404) {
       title = "User not found";
-      message =
-        typeof error.data === "string" ? error.data : "User not found.";
+      message = typeof error.data === "string" ? error.data : "User not found.";
     } else {
       title = `Error ${error.status}`;
-      message =
-        typeof error.data === "string" ? error.data : error.statusText;
+      message = typeof error.data === "string" ? error.data : error.statusText;
     }
   }
 

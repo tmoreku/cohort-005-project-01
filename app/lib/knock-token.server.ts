@@ -45,14 +45,29 @@ export type KnockFeedConfig = {
 export async function getKnockFeedConfig(
   userId: number
 ): Promise<KnockFeedConfig | null> {
-  const publicApiKey = process.env.KNOCK_PUBLIC_API_KEY;
   const feedChannelId = process.env.KNOCK_FEED_CHANNEL_ID;
+  const auth = await getKnockUserAuth(userId);
+  if (!auth || !feedChannelId) return null;
+
+  return { ...auth, feedChannelId };
+}
+
+// What the browser needs to call Knock as this user (Notification
+// Preferences). Null when Knock isn't configured.
+export type KnockUserAuth = {
+  publicApiKey: string;
+  userToken: string;
+};
+
+export async function getKnockUserAuth(
+  userId: number
+): Promise<KnockUserAuth | null> {
+  const publicApiKey = process.env.KNOCK_PUBLIC_API_KEY;
   const signingKey = process.env.KNOCK_SIGNING_KEY;
-  if (!publicApiKey || !feedChannelId || !signingKey) return null;
+  if (!publicApiKey || !signingKey) return null;
 
   return {
     publicApiKey,
-    feedChannelId,
     userToken: await signKnockUserToken(userId, signingKey),
   };
 }

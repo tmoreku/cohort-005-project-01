@@ -1,6 +1,5 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -14,7 +13,6 @@ import {
   KnockProvider,
   useKnockFeed,
 } from "@knocklabs/react-core";
-import { z } from "zod";
 import {
   Archive,
   Bell,
@@ -27,6 +25,10 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
+import {
+  RENEW_BEFORE_EXPIRY_MS,
+  useKnockUserToken,
+} from "~/lib/use-knock-user-token";
 import type { KnockFeedConfig } from "~/lib/knock-token.server";
 import type { NotificationKind } from "~/lib/notifier.server";
 
@@ -162,10 +164,6 @@ function CountBadge({
 
 // ─── Knock connection ───
 
-const RENEW_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
-
-const tokenResponseSchema = z.object({ token: z.string() });
-
 function FeedConnection({
   userId,
   config,
@@ -179,20 +177,7 @@ function FeedConnection({
   onClose: () => void;
   onUnseenCountChange: (count: number) => void;
 }) {
-  // The loader signs a fresh token on every navigation. Keeping the first one
-  // (and then only renewed ones) stops each navigation re-authenticating.
-  const [userToken, setUserToken] = useState(config.userToken);
-
-  const renewToken = useCallback(async () => {
-    const response = await fetch("/api/knock-token", {
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) return;
-    const parsed = tokenResponseSchema.safeParse(await response.json());
-    if (!parsed.success) return;
-    setUserToken(parsed.data.token);
-    return parsed.data.token;
-  }, []);
+  const { userToken, renewToken } = useKnockUserToken(config.userToken);
 
   const user = useMemo(() => ({ id: String(userId) }), [userId]);
 
