@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createNotifier,
   recordingNotifier,
-  sendNotification,
+  sendNotifications,
+  type Notifier,
   toKnockRecipient,
   type NotificationToSend,
   type RecipientUser,
@@ -88,12 +89,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("sendNotification", () => {
+describe("sendNotifications", () => {
   it("records the Notification locally when there is no Knock secret key", async () => {
     const directory = mkdtempSync(join(tmpdir(), "notifications-"));
 
-    await sendNotification(
-      discussionReply,
+    await sendNotifications(
+      [discussionReply],
       createNotifier({
         knockSecretApiKey: undefined,
         localDirectory: directory,
@@ -117,8 +118,7 @@ describe("sendNotification", () => {
     const directory = mkdtempSync(join(tmpdir(), "notifications-"));
     const notifier = recordingNotifier(directory);
 
-    await sendNotification(discussionReply, notifier);
-    await sendNotification(discussionReply, notifier);
+    await sendNotifications([discussionReply, discussionReply], notifier);
 
     expect(readdirSync(directory)).toHaveLength(2);
   });
@@ -132,7 +132,7 @@ describe("sendNotification", () => {
       localDirectory: directory,
       production: true,
     });
-    await sendNotification(discussionReply, notifier);
+    await sendNotifications([discussionReply], notifier);
 
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining("KNOCK_SECRET_API_KEY")
@@ -143,9 +143,38 @@ describe("sendNotification", () => {
   it("keeps Notifications in memory with the recording notifier", async () => {
     const notifier = recordingNotifier();
 
-    await sendNotification(discussionReply, notifier);
+    await sendNotifications([discussionReply], notifier);
 
     expect(notifier.sent).toEqual([discussionReply]);
+  });
+
+  // Delivery isn't guaranteed (spec #21): the database write has already
+  // happened, so a failed send is logged and never fails the request.
+  it("sends every Notification even when one fails, and logs the failure without throwing", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const recorded = recordingNotifier();
+    const failsOnReceipt: Notifier = {
+      async send(notification) {
+        if (notification.kind === "refund-request-received") {
+          throw new Error("Knock is down");
+        }
+        await recorded.send(notification);
+      },
+    };
+    const receipt: NotificationToSend = {
+      ...discussionReply,
+      kind: "refund-request-received",
+    };
+
+    await expect(
+      sendNotifications([receipt, discussionReply], failsOnReceipt)
+    ).resolves.toBeUndefined();
+
+    expect(recorded.sent).toEqual([discussionReply]);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("refund-request-received"),
+      expect.any(Error)
+    );
   });
 });
 

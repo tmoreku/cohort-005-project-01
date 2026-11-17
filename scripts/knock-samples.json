@@ -63,7 +63,8 @@
       "courseTitle": "Full-Stack React Router",
       "seatsUsed": 10,
       "seatsTotal": 10,
-      "lastSeat": true
+      "lastSeat": true,
+      "claimedAt": "2026-11-17T08:15:00Z"
     }
   },
   {
@@ -75,7 +76,8 @@
       "studentName": "Ada Lovelace",
       "courseTitle": "Full-Stack React Router",
       "lessonTitle": "Closures, explained.",
-      "questionBody": "Why does the counter keep its value?\n\n```js\nlet n = 0\n```\n\nI expected it to reset."
+      "questionBody": "Why does the counter keep its value?\n\n```js\nlet n = 0\n```\n\nI expected it to reset.",
+      "askedAt": "2026-11-17T08:40:00Z"
     }
   },
   {
@@ -88,7 +90,8 @@
       "courseTitle": "Full-Stack React Router",
       "lessonTitle": "Closures, explained.",
       "questionBody": "Why does the counter keep its value?\n\nI expected it to reset.",
-      "replyBody": "The inner function closes over `n`, so it lives as long as the function does."
+      "replyBody": "The inner function closes over `n`, so it lives as long as the function does.",
+      "repliedAt": "2026-11-17T09:05:00Z"
     }
   }
 ]

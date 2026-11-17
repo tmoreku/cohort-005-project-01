@@ -79,6 +79,7 @@ describe("asking a Discussion Question", () => {
           courseTitle: "Test Course",
           lessonTitle: "Closures, explained.",
           questionBody: "Why does the counter keep its value?",
+          askedAt: comment.createdAt,
         },
       },
     ]);
@@ -145,6 +146,7 @@ describe("posting a Discussion Reply", () => {
           lessonTitle: "Closures, explained.",
           questionBody: "Why does the counter keep its value?",
           replyBody: "The inner function closes over it.",
+          repliedAt: reply.createdAt,
         },
       },
     ]);
@@ -186,42 +188,20 @@ describe("posting a Discussion Reply", () => {
 });
 
 describe("editing", () => {
-  it("notifies nobody when a Discussion Question is edited", () => {
+  // Editing returns no Notifications at all: edits never notify anyone.
+  it("saves the new body and marks it edited", () => {
     const asker = addStudent("Ada");
     const question = postToDiscussion(db, lessonId, asker.id, null, "Why?")
       .comment;
 
-    const { comment, notifications } = editInDiscussion(
+    const edited = editInDiscussion(
       db,
       question.id,
       asker.id,
       "Why does the counter keep its value?"
     );
 
-    expect(comment.body).toBe("Why does the counter keep its value?");
-    expect(notifications).toEqual([]);
-  });
-
-  it("notifies nobody when a Discussion Reply is edited", () => {
-    const asker = addStudent("Ada");
-    const replier = addStudent("Linus");
-    const question = postToDiscussion(db, lessonId, asker.id, null, "Why?")
-      .comment;
-    const reply = postToDiscussion(
-      db,
-      lessonId,
-      replier.id,
-      question.id,
-      "Closures."
-    ).comment;
-
-    const { notifications } = editInDiscussion(
-      db,
-      reply.id,
-      replier.id,
-      "Closures: the inner function keeps the variable alive."
-    );
-
-    expect(notifications).toEqual([]);
+    expect(edited.body).toBe("Why does the counter keep its value?");
+    expect(edited.editedAt).not.toBeNull();
   });
 });

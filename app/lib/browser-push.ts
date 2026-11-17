@@ -3,41 +3,31 @@
 // permission"; design: prototype/push-permission). Pure: the caller reads the
 // facts from `window` and passes them in.
 
-export type PushState =
+export const PUSH_STATES = [
   // Reading the browser (first render, and the server).
-  | "checking"
+  "checking",
   // Cadence has no Knock push channel or Firebase keys configured.
-  | "unavailable"
+  "unavailable",
   // The browser can push and nobody has answered its prompt yet.
-  | "not-asked"
+  "not-asked",
   // Permission granted: registering this browser's token in Knock. Covers
   // "Allowed, token gone", which re-registers silently.
-  | "connecting"
-  // Permission granted and the token is registered.
-  | "on"
-  // Registering failed: "Couldn't connect this browser" + Try again.
-  | "connect-failed"
-  // Permission granted, but the person turned push off for this browser.
-  | "off"
-  // The person or the browser said no; only they can undo it.
-  | "denied"
-  // iPhone/iPad in a normal Safari tab: no push APIs until it's on the Home Screen.
-  | "ios-tab"
-  // Any other browser without Notification / service worker / PushManager.
-  | "unsupported";
-
-export const PUSH_STATES: readonly PushState[] = [
-  "checking",
-  "unavailable",
-  "not-asked",
   "connecting",
+  // Permission granted and the token is registered.
   "on",
+  // Registering failed: "Couldn't connect this browser" + Try again.
   "connect-failed",
+  // Permission granted, but the person turned push off for this browser.
   "off",
+  // The person or the browser said no; only they can undo it.
   "denied",
+  // iPhone/iPad in a normal Safari tab: no push APIs until it's on the Home Screen.
   "ios-tab",
+  // Any other browser without Notification / service worker / PushManager.
   "unsupported",
-];
+] as const;
+
+export type PushState = (typeof PUSH_STATES)[number];
 
 export type BrowserFacts = {
   hasNotification: boolean;

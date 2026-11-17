@@ -3,6 +3,7 @@ import type {
   SetPreferencesProperties,
 } from "@knocklabs/client";
 import { UserRole } from "~/db/schema";
+import { catalogueEntry } from "~/lib/notification-catalogue";
 import type { NotificationKind } from "~/lib/notifier.server";
 
 // ─── Notification Preferences ───
@@ -11,9 +12,9 @@ import type { NotificationKind } from "~/lib/notifier.server";
 // preference set (one workflow per kind; email → Knock's `email` channel
 // type, browser → `push`). The Feed has no Notification Preference.
 //
-// The defaults here must match the Knock environment's default preference
-// set: Knock applies those to anyone who hasn't flipped a switch, and this
-// shows them.
+// Names and defaults come from NOTIFICATION_CATALOGUE, which also sets the
+// Knock environment's default preference set: Knock applies those to anyone
+// who hasn't flipped a switch, and this shows them.
 
 export type PreferenceChannel = "email" | "browser";
 
@@ -28,60 +29,60 @@ export type PreferenceRow = {
 };
 
 type Audience =
-  "buyer" | "questionAuthor" | "teamAdmin" | "instructor" | "platformAdmin";
+  | "buyer"
+  | "questionAuthor"
+  | "teamLicenceBuyer"
+  | "instructor"
+  | "platformAdmin";
 
-const ROWS: (PreferenceRow & { audience: Audience })[] = [
+// The kinds with a row, in the order the card shows them. Names and defaults
+// come from the catalogue.
+const CHOICES: { kind: NotificationKind; description: string; audience: Audience }[] = [
   {
     kind: "refund-request-opened",
-    name: "Refund Request opened",
     description: "A buyer asks for a refund",
     audience: "platformAdmin",
-    email: "on",
-    browser: "on",
   },
   {
     kind: "refund-request-approved",
-    name: "Refund Request approved",
     description: "Your refund request is approved",
     audience: "buyer",
-    email: "mandatory",
-    browser: "on",
   },
   {
     kind: "refund-request-declined",
-    name: "Refund Request declined",
     description: "Your refund request is declined",
     audience: "buyer",
-    email: "mandatory",
-    browser: "on",
   },
   {
     kind: "discussion-reply",
-    name: "Discussion Reply",
     description: "Someone replies to a question you asked",
     audience: "questionAuthor",
-    email: "on",
-    browser: "on",
   },
   {
     kind: "seat-claimed",
-    name: "Seat claimed",
     description: "Someone claims a Seat on your Team Licence",
-    audience: "teamAdmin",
-    email: "off",
-    browser: "none",
+    audience: "teamLicenceBuyer",
   },
   {
     kind: "discussion-question-asked",
-    name: "Discussion Question asked",
     description: "A Student asks a question on one of your lessons",
     audience: "instructor",
-    email: "on",
-    browser: "on",
   },
 ];
 
-export type PreferencePerson = { role: UserRole; isTeamAdmin: boolean };
+const ROWS: (PreferenceRow & { audience: Audience })[] = CHOICES.map(
+  (choice) => {
+    const entry = catalogueEntry(choice.kind);
+    return {
+      ...choice,
+      name: entry.name,
+      email: entry.email,
+      browser: entry.push ? "on" : "none",
+    };
+  }
+);
+
+export type PreferencePerson = { role: UserRole; boughtTeamLicence: boolean };
 
 function receives(person: PreferencePerson, audience: Audience): boolean {
   switch (audience) {
@@ -89,9 +90,9 @@ function receives(person: PreferencePerson, audience: Audience): boolean {
     case "buyer":
     case "questionAuthor":
       return person.role === UserRole.Student;
-    // Whoever bought a Team Licence hears about its Seats.
-    case "teamAdmin":
-      return person.isTeamAdmin;
+    // Seat claimed goes to whoever bought the Team Licence (see claimSeat).
+    case "teamLicenceBuyer":
+      return person.boughtTeamLicence;
     case "instructor":
       return person.role === UserRole.Instructor;
     case "platformAdmin":

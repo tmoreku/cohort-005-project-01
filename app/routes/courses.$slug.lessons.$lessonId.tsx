@@ -12,10 +12,10 @@ import {
 import {
   deleteFromDiscussion,
   editInDiscussion,
-  getDiscussionComment,
+  getQuestionOrReply,
   postToDiscussion,
-  sendDiscussionNotifications,
 } from "~/lib/discussions.server";
+import { sendNotifications } from "~/lib/notifier.server";
 import { db } from "~/db";
 import {
   categories,
@@ -821,7 +821,7 @@ export async function action({ params, request }: Route.ActionArgs) {
           parsed.data.parentId ?? null,
           parsed.data.body
         );
-        await sendDiscussionNotifications(notifications);
+        await sendNotifications(notifications);
         return { ok: true };
       }
 
@@ -832,9 +832,9 @@ export async function action({ params, request }: Route.ActionArgs) {
         }
         // Scope the id to this lesson so a comment elsewhere can't be reached
         // by posting its id to this route.
-        const existing = getDiscussionComment(db, parsed.data.commentId);
+        const existing = getQuestionOrReply(db, parsed.data.commentId);
         if (!existing || existing.lessonId !== lessonId) {
-          throw data("Comment not found", { status: 404 });
+          throw data("Question or reply not found", { status: 404 });
         }
         editInDiscussion(
           db,
@@ -849,9 +849,9 @@ export async function action({ params, request }: Route.ActionArgs) {
       if (!parsed.success) {
         return { ok: false, error: "Could not delete that comment." };
       }
-      const existing = getDiscussionComment(db, parsed.data.commentId);
+      const existing = getQuestionOrReply(db, parsed.data.commentId);
       if (!existing || existing.lessonId !== lessonId) {
-        throw data("Comment not found", { status: 404 });
+        throw data("Question or reply not found", { status: 404 });
       }
       deleteFromDiscussion(
         db,

@@ -1,13 +1,10 @@
 import { eq } from "drizzle-orm";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import * as schema from "~/db/schema";
+import type { Db } from "~/db";
 import { users } from "~/db/schema";
 import {
   timezoneAndLocaleChanges,
   type TimezoneAndLocale,
 } from "~/lib/timezone-and-locale";
-
-type Db = BetterSQLite3Database<typeof schema>;
 
 // Stores the browser's detected timezone and locale (already parsed by
 // `timezoneAndLocaleSchema`), writing only what changed. Returns whether

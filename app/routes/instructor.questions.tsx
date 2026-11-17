@@ -18,10 +18,10 @@ import {
   discussionQuestionAnchor,
 } from "~/lib/comments";
 import {
-  getDiscussionComment,
+  getQuestionOrReply,
   postToDiscussion,
-  sendDiscussionNotifications,
 } from "~/lib/discussions.server";
+import { sendNotifications } from "~/lib/notifier.server";
 import { parseFormData } from "~/lib/validation";
 import { db } from "~/db";
 import {
@@ -157,7 +157,7 @@ export async function action({ request }: Route.ActionArgs) {
     return { ok: false, error: "Enter a reply before posting." };
   }
 
-  const question = getDiscussionComment(db, parsed.data.commentId);
+  const question = getQuestionOrReply(db, parsed.data.commentId);
   if (!question) {
     throw data("Question not found", { status: 404 });
   }
@@ -182,7 +182,7 @@ export async function action({ request }: Route.ActionArgs) {
       question.id,
       parsed.data.body
     );
-    await sendDiscussionNotifications(notifications);
+    await sendNotifications(notifications);
   } catch (error) {
     if (error instanceof Error) {
       return { ok: false, error: error.message };

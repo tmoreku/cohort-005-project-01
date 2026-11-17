@@ -10,22 +10,17 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
-import {
-  UserRole,
-  RefundStatus,
-  TeamMemberRole,
-  teamMembers,
-  users,
-} from "~/db/schema";
+import { UserRole, RefundStatus, users } from "~/db/schema";
 import { AlertTriangle } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
 import { db } from "~/db";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { formatPrice } from "~/lib/utils";
 import {
   listRefundRequestsForBuyer,
   refundRequestElementId,
 } from "~/lib/refunds.server";
+import { receivesSeatClaimed } from "~/lib/seats.server";
 import { getKnockUserAuth } from "~/lib/knock-token.server";
 import { upsertKnockRecipient } from "~/lib/notifier.server";
 import { preferenceRowsFor } from "~/lib/notification-preferences";
@@ -77,7 +72,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const preferenceRows = preferenceRowsFor({
     role: currentUser.role,
-    isTeamAdmin: isTeamAdmin(currentUserId),
+    boughtTeamLicence: receivesSeatClaimed(db, currentUserId),
   });
   const knock = await getKnockUserAuth(currentUserId);
   if (knock) {
@@ -100,20 +95,6 @@ export async function loader({ request }: Route.LoaderArgs) {
     preferenceRows,
     knock,
   };
-}
-
-function isTeamAdmin(userId: number): boolean {
-  const membership = db
-    .select({ id: teamMembers.id })
-    .from(teamMembers)
-    .where(
-      and(
-        eq(teamMembers.userId, userId),
-        eq(teamMembers.role, TeamMemberRole.Admin)
-      )
-    )
-    .get();
-  return membership !== undefined;
 }
 
 export async function action({ request }: Route.ActionArgs) {

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createTestDb, seedBaseData } from "~/test/setup";
 import * as schema from "~/db/schema";
 import { UserRole } from "~/db/schema";
-import { claimSeat } from "./seats.server";
+import { claimSeat, receivesSeatClaimed } from "./seats.server";
 
 type TestDb = ReturnType<typeof createTestDb>;
 
@@ -110,6 +110,7 @@ describe("claimSeat", () => {
       seatsUsed: 2,
       seatsTotal: 3,
       lastSeat: false,
+      claimedAt: NOW.toISOString(),
     });
   });
 
@@ -156,5 +157,46 @@ describe("claimSeat", () => {
       seatsUsed: 1,
       seatsTotal: 5,
     });
+  });
+});
+
+// Settings shows the Seat claimed row to exactly the people claimSeat
+// notifies: whoever bought a Team Licence.
+describe("receivesSeatClaimed", () => {
+  it("is true for the buyer of a Team Licence", () => {
+    const teamAdmin = addStudent("Tess");
+    buyTeamLicence(teamAdmin.id, 2);
+
+    expect(receivesSeatClaimed(db, teamAdmin.id)).toBe(true);
+  });
+
+  it("is false for a team-admin member who didn't buy the Team Licence", () => {
+    const buyer = addStudent("Tess");
+    const coAdmin = addStudent("Cora");
+    buyTeamLicence(buyer.id, 2);
+    const team = db.insert(schema.teams).values({}).returning().get();
+    db.insert(schema.teamMembers)
+      .values({
+        teamId: team.id,
+        userId: coAdmin.id,
+        role: schema.TeamMemberRole.Admin,
+      })
+      .run();
+
+    expect(receivesSeatClaimed(db, coAdmin.id)).toBe(false);
+  });
+
+  it("is false for someone with only an Individual Purchase", () => {
+    const student = addStudent("Sam");
+    db.insert(schema.purchases)
+      .values({
+        userId: student.id,
+        courseId: base.course.id,
+        amountPaid: 7900,
+        country: "GB",
+      })
+      .run();
+
+    expect(receivesSeatClaimed(db, student.id)).toBe(false);
   });
 });

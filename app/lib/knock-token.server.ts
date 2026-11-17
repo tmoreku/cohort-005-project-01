@@ -63,13 +63,11 @@ export async function getKnockUserAuth(
   userId: number
 ): Promise<KnockUserAuth | null> {
   const publicApiKey = process.env.KNOCK_PUBLIC_API_KEY;
-  const signingKey = process.env.KNOCK_SIGNING_KEY;
-  if (!publicApiKey || !signingKey) return null;
+  if (!publicApiKey) return null;
+  const userToken = await renewKnockUserToken(userId);
+  if (!userToken) return null;
 
-  return {
-    publicApiKey,
-    userToken: await signKnockUserToken(userId, signingKey),
-  };
+  return { publicApiKey, userToken };
 }
 
 // A fresh token for the signed-in user, or null when there's no signing key.

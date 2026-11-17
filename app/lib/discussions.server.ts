@@ -1,35 +1,31 @@
 import { eq } from "drizzle-orm";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import * as schema from "~/db/schema";
-import { comments, courses, lessons, modules, users } from "~/db/schema";
+import type { Db } from "~/db";
+import { comments, courses, lessons, modules } from "~/db/schema";
 import {
   MAX_COMMENT_LENGTH,
   MIN_COMMENT_LENGTH,
   discussionQuestionAnchor,
   discussionReplyAnchor,
 } from "~/lib/comments";
-import {
-  sendNotification,
-  type NotificationToSend,
-  type RecipientUser,
-} from "~/lib/notifier.server";
+import type { NotificationToSend } from "~/lib/notifier.server";
+import { getUser, toActor, toRecipient } from "~/lib/notification-people.server";
 
 // ─── Discussions ───
 // Posting, editing and deleting Discussion Questions and Discussion Replies
 // under a lesson. Every top-level comment is a Discussion Question; a comment
 // with a parent is a Discussion Reply. See GLOSSARY.md.
 //
-// Each function returns the Notifications to send; the route hands them to
-// the notifier. Every function takes the database first, so tests can hand in
+// Posting returns the Notifications to send; the route hands them to
+// sendNotifications. Every function takes the database first, so tests can hand in
 // an in-memory one. Validation failures throw an Error whose message is shown
 // to the person.
 
-export type Db = BetterSQLite3Database<typeof schema>;
+// A row of `comments`: a Discussion Question, or a Discussion Reply when it
+// has a parent.
+type QuestionOrReply = typeof comments.$inferSelect;
 
-type Comment = typeof comments.$inferSelect;
-
-export type DiscussionChange = {
-  comment: Comment;
+export type DiscussionPosting = {
+  comment: QuestionOrReply;
   notifications: NotificationToSend[];
 };
 
@@ -41,8 +37,11 @@ function lessonUrl(courseSlug: string, lessonId: number) {
 
 // ─── Lookups ───
 
-export function getDiscussionComment(db: Db, commentId: number) {
-  return db.select().from(comments).where(eq(comments.id, commentId)).get();
+export function getQuestionOrReply(
+  db: Db,
+  id: number
+): QuestionOrReply | undefined {
+  return db.select().from(comments).where(eq(comments.id, id)).get();
 }
 
 function getLessonContext(db: Db, lessonId: number) {
@@ -60,37 +59,13 @@ function getLessonContext(db: Db, lessonId: number) {
     .get();
 }
 
-function getRecipient(db: Db, userId: number): RecipientUser | undefined {
-  return db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      timezone: users.timezone,
-      locale: users.locale,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .get();
-}
-
-function getActor(db: Db, userId: number) {
-  return db
-    .select({ id: users.id, name: users.name, avatarUrl: users.avatarUrl })
-    .from(users)
-    .where(eq(users.id, userId))
-    .get();
-}
-
 function assertValidBody(body: string) {
   const trimmed = body.trim();
   if (trimmed.length < MIN_COMMENT_LENGTH) {
-    throw new Error("Comment cannot be empty");
+    throw new Error("Write something before posting.");
   }
   if (trimmed.length > MAX_COMMENT_LENGTH) {
-    throw new Error(
-      `Comment must be ${MAX_COMMENT_LENGTH} characters or fewer`
-    );
+    throw new Error(`Keep it to ${MAX_COMMENT_LENGTH} characters or fewer.`);
   }
   return trimmed;
 }
@@ -111,7 +86,7 @@ export function postToDiscussion(
   authorId: number,
   parentId: number | null,
   body: string
-): DiscussionChange {
+): DiscussionPosting {
   const trimmed = assertValidBody(body);
 
   const lesson = getLessonContext(db, lessonId);
@@ -119,21 +94,22 @@ export function postToDiscussion(
     throw new Error("Lesson not found");
   }
 
-  const actor = getActor(db, authorId);
-  if (!actor) {
+  const author = getUser(db, authorId);
+  if (!author) {
     throw new Error("You must be logged in");
   }
+  const actor = toActor(author);
 
-  const question = parentId === null ? null : getDiscussionComment(db, parentId);
+  const question = parentId === null ? null : getQuestionOrReply(db, parentId);
   if (parentId !== null) {
     if (!question) {
-      throw new Error("Parent comment not found");
+      throw new Error("That question wasn't found.");
     }
     if (question.lessonId !== lessonId) {
-      throw new Error("Parent comment belongs to a different lesson");
+      throw new Error("That question is on a different lesson.");
     }
     if (question.parentId !== null) {
-      throw new Error("Replies can only be one level deep");
+      throw new Error("You can only reply to a question, not to a reply.");
     }
   }
 
@@ -150,7 +126,7 @@ export function postToDiscussion(
   };
 
   if (!question) {
-    const instructor = getRecipient(db, lesson.instructorId);
+    const instructor = getUser(db, lesson.instructorId);
     if (!instructor || instructor.id === authorId) {
       return { comment, notifications: [] };
     }
@@ -159,13 +135,14 @@ export function postToDiscussion(
       notifications: [
         {
           kind: "discussion-question-asked",
-          recipients: [instructor],
+          recipients: [toRecipient(instructor)],
           actor,
           url: `${url}#${discussionQuestionAnchor(comment.id)}`,
           data: {
             studentName: actor.name,
             ...titles,
             questionBody: comment.body,
+            askedAt: comment.createdAt,
           },
         },
       ],
@@ -175,7 +152,7 @@ export function postToDiscussion(
   // A deleted Discussion Question has nobody left to tell.
   if (question.deletedAt !== null) return { comment, notifications: [] };
 
-  const asker = getRecipient(db, question.userId);
+  const asker = getUser(db, question.userId);
   if (!asker || asker.id === authorId) return { comment, notifications: [] };
 
   return {
@@ -183,7 +160,7 @@ export function postToDiscussion(
     notifications: [
       {
         kind: "discussion-reply",
-        recipients: [asker],
+        recipients: [toRecipient(asker)],
         actor,
         url: `${url}#${discussionReplyAnchor(comment.id)}`,
         data: {
@@ -191,89 +168,70 @@ export function postToDiscussion(
           ...titles,
           questionBody: question.body,
           replyBody: comment.body,
+          repliedAt: comment.createdAt,
         },
       },
     ],
   };
 }
 
-/**
- * Hands posted Notifications to the notifier. The comment is already saved,
- * so a Notification that fails to send is logged rather than turned into an
- * error the person would retry (delivery isn't guaranteed; see spec #21).
- */
-export async function sendDiscussionNotifications(
-  notifications: NotificationToSend[]
-): Promise<void> {
-  for (const notification of notifications) {
-    try {
-      await sendNotification(notification);
-    } catch (error) {
-      console.error(`Could not send the ${notification.kind} Notification`, error);
-    }
-  }
-}
-
 // ─── Editing and deleting ───
 
-/** Edits the author's own comment. Edits never notify anyone. */
+/**
+ * Edits the author's own Discussion Question or Discussion Reply. Edits never
+ * notify anyone.
+ */
 export function editInDiscussion(
   db: Db,
   commentId: number,
   userId: number,
   body: string
-): DiscussionChange {
+): QuestionOrReply {
   const trimmed = assertValidBody(body);
 
-  const existing = getDiscussionComment(db, commentId);
+  const existing = getQuestionOrReply(db, commentId);
   if (!existing) {
-    throw new Error("Comment not found");
+    throw new Error("That question or reply wasn't found.");
   }
   if (existing.deletedAt !== null) {
-    throw new Error("Comment has been deleted");
+    throw new Error("That question or reply has been deleted.");
   }
   if (existing.userId !== userId) {
-    throw new Error("You can only edit your own comments");
+    throw new Error("You can only edit your own questions and replies.");
   }
 
-  const comment = db
+  return db
     .update(comments)
     .set({ body: trimmed, editedAt: new Date().toISOString() })
     .where(eq(comments.id, commentId))
     .returning()
     .get();
-
-  return { comment, notifications: [] };
 }
 
 /**
- * Soft-deletes a comment: its author's, or anyone's for staff. A deleted
- * Discussion Question keeps its Discussion Replies readable, but later
- * Discussion Replies to it notify nobody.
+ * Soft-deletes a Discussion Question or Discussion Reply: its author's, or
+ * anyone's for staff. A deleted Discussion Question keeps its Discussion
+ * Replies readable, but later Discussion Replies to it notify nobody.
  */
 export function deleteFromDiscussion(
   db: Db,
   commentId: number,
   userId: number,
   isStaff: boolean
-): DiscussionChange {
-  const existing = getDiscussionComment(db, commentId);
+): QuestionOrReply {
+  const existing = getQuestionOrReply(db, commentId);
   if (!existing) {
-    throw new Error("Comment not found");
+    throw new Error("That question or reply wasn't found.");
   }
   if (existing.userId !== userId && !isStaff) {
-    throw new Error("You can only delete your own comments");
+    throw new Error("You can only delete your own questions and replies.");
   }
-  if (existing.deletedAt !== null) {
-    return { comment: existing, notifications: [] };
-  }
+  if (existing.deletedAt !== null) return existing;
 
-  const comment = db
+  return db
     .update(comments)
     .set({ deletedAt: new Date().toISOString() })
     .where(eq(comments.id, commentId))
     .returning()
     .get();
-
-  return { comment, notifications: [] };
 }

@@ -65,6 +65,12 @@ export const NOTIFICATION_CATALOGUE = [
   },
 ] as const satisfies readonly CatalogueEntry[];
 
+export function catalogueEntry(kind: NotificationKind): CatalogueEntry {
+  const entry = NOTIFICATION_CATALOGUE.find((e) => e.workflowKey === kind);
+  if (!entry) throw new Error(`${kind} is missing from the catalogue.`);
+  return entry;
+}
+
 type ChannelTypeDefaults = { email: boolean; push?: boolean };
 
 export type KnockPreferenceSet = {

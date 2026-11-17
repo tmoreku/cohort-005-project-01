@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Lock } from "lucide-react";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
+import type { BrowserColumn } from "~/lib/browser-push";
 import type { KnockUserAuth } from "~/lib/knock-token.server";
 import {
   readPreferences,
@@ -29,30 +30,18 @@ import {
 // defaults with every switch disabled, and the switches come alive once the
 // saved preferences have loaded.
 
-// This browser's push state, as far as the Browser column cares. Until web
-// push ships (#30) it's never on, so the Browser switches stay greyed out.
-export type BrowserNotificationsState = {
-  on: boolean;
-  // One line saying why the Browser switches don't do anything yet.
-  hint: string;
-};
-
-const BROWSER_NOT_ON_YET: BrowserNotificationsState = {
-  on: false,
-  hint: "Browser notifications aren't on for this browser yet.",
-};
-
 export function NotificationPreferencesCard({
   userId,
   rows,
   knock,
-  browser = BROWSER_NOT_ON_YET,
+  browser,
 }: {
   userId: number;
   rows: PreferenceRow[];
   // Null when Knock isn't configured: the defaults show, read-only.
   knock: KnockUserAuth | null;
-  browser?: BrowserNotificationsState;
+  // This browser's push state: the Browser switches only work when it's on.
+  browser: BrowserColumn;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -104,7 +93,7 @@ function ConnectedPreferences({
   userId: number;
   rows: PreferenceRow[];
   knock: KnockUserAuth;
-  browser: BrowserNotificationsState;
+  browser: BrowserColumn;
 }) {
   const { userToken, renewToken } = useKnockUserToken(knock.userToken);
   const user = useMemo(() => ({ id: String(userId) }), [userId]);
@@ -129,7 +118,7 @@ function EditablePreferences({
   browser,
 }: {
   rows: PreferenceRow[];
-  browser: BrowserNotificationsState;
+  browser: BrowserColumn;
 }) {
   const knock = useKnockClient();
   // The preference set as Knock last confirmed it. Saves run one at a time,
@@ -209,7 +198,7 @@ function PreferencesTable({
 }: {
   rows: PreferenceRow[];
   saved: SavedPreferences;
-  browser: BrowserNotificationsState;
+  browser: BrowserColumn;
   // Missing while loading, or when preferences can't be changed.
   onChange?: (
     row: PreferenceRow,

@@ -1,7 +1,9 @@
 import { and, eq } from "drizzle-orm";
-import { coupons, courses, enrollments, purchases, users } from "~/db/schema";
-import { getSeatAvailability, type Db } from "~/lib/refunds.server";
-import type { NotificationToSend, RecipientUser } from "~/lib/notifier.server";
+import type { Db } from "~/db";
+import { coupons, courses, enrollments, purchases } from "~/db/schema";
+import { getSeatAvailability } from "~/lib/refunds.server";
+import type { NotificationToSend } from "~/lib/notifier.server";
+import { getUser, toActor, toRecipient } from "~/lib/notification-people.server";
 
 // ─── Seats ───
 // A Student claiming a Seat on a Team Licence. Claiming gives them an
@@ -36,18 +38,21 @@ export function seatUrl(courseId: number, seatId: number): string {
   return `/team?course=${courseId}#${seatRowId(seatId)}`;
 }
 
-function getUser(db: Db, userId: number) {
-  return db.select().from(users).where(eq(users.id, userId)).get();
-}
+const SEAT_NOT_FOUND = "This seat doesn't exist.";
 
-function toRecipient(user: typeof users.$inferSelect): RecipientUser {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    timezone: user.timezone,
-    locale: user.locale,
-  };
+/**
+ * Whether this person can get Seat claimed Notifications: they bought a Team
+ * Licence (a Purchase with Seats). The same rule claimSeat uses to pick the
+ * recipient, so Settings offers the preference to exactly those people.
+ */
+export function receivesSeatClaimed(db: Db, userId: number): boolean {
+  const seat = db
+    .select({ id: coupons.id })
+    .from(coupons)
+    .innerJoin(purchases, eq(coupons.purchaseId, purchases.id))
+    .where(eq(purchases.userId, userId))
+    .get();
+  return seat !== undefined;
 }
 
 export function claimSeat(
@@ -59,11 +64,11 @@ export function claimSeat(
 ): ClaimSeatResult {
   const seat = db.select().from(coupons).where(eq(coupons.code, code)).get();
   if (!seat) {
-    return { ok: false, error: "Coupon not found" };
+    return { ok: false, error: SEAT_NOT_FOUND };
   }
 
   if (seat.redeemedByUserId !== null) {
-    return { ok: false, error: "Coupon has already been redeemed" };
+    return { ok: false, error: "This seat has already been claimed." };
   }
 
   const availability = getSeatAvailability(db, seat);
@@ -87,14 +92,14 @@ export function claimSeat(
     .where(eq(purchases.id, seat.purchaseId))
     .get();
   if (!licence) {
-    return { ok: false, error: "Coupon not found" };
+    return { ok: false, error: SEAT_NOT_FOUND };
   }
 
   if (licence.country && licence.country !== userCountry) {
     return {
       ok: false,
       error:
-        "This coupon can only be redeemed from the same country as the purchaser",
+        "This seat can only be claimed from the same country as the person who bought it.",
     };
   }
 
@@ -107,9 +112,10 @@ export function claimSeat(
     return { ok: false, error: "Course not found" };
   }
 
+  const claimedAt = now.toISOString();
   const enrollment = db.transaction((tx) => {
     tx.update(coupons)
-      .set({ redeemedByUserId: userId, redeemedAt: now.toISOString() })
+      .set({ redeemedByUserId: userId, redeemedAt: claimedAt })
       .where(eq(coupons.id, seat.id))
       .run();
     return tx
@@ -128,6 +134,7 @@ export function claimSeat(
       purchaseId: licence.id,
       courseId: course.id,
       courseTitle: course.title,
+      claimedAt,
     }),
   };
 }
@@ -141,6 +148,7 @@ function buildSeatClaimedNotification(
     purchaseId: number;
     courseId: number;
     courseTitle: string;
+    claimedAt: string;
   }
 ): NotificationToSend | null {
   // Never notify the actor.
@@ -161,11 +169,7 @@ function buildSeatClaimedNotification(
   return {
     kind: "seat-claimed",
     recipients: [toRecipient(teamAdmin)],
-    actor: {
-      id: student.id,
-      name: student.name,
-      avatarUrl: student.avatarUrl,
-    },
+    actor: toActor(student),
     url: seatUrl(claimed.courseId, claimed.seatId),
     data: {
       studentName: student.name,
@@ -174,6 +178,7 @@ function buildSeatClaimedNotification(
       seatsUsed,
       seatsTotal,
       lastSeat: seatsUsed === seatsTotal,
+      claimedAt: claimed.claimedAt,
     },
   };
 }

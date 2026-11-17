@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { alias } from "drizzle-orm/sqlite-core";
-import * as schema from "~/db/schema";
+import type { Db, Queryable } from "~/db";
 import {
   coupons,
   courses,
@@ -18,11 +17,8 @@ import {
   UserRole,
 } from "~/db/schema";
 import { formatPrice } from "~/lib/utils";
-import type {
-  NotificationActor,
-  NotificationToSend,
-  RecipientUser,
-} from "~/lib/notifier.server";
+import type { NotificationToSend } from "~/lib/notifier.server";
+import { getUser, toActor, toRecipient } from "~/lib/notification-people.server";
 import {
   REFUND_COMPLETION_LIMIT,
   REFUND_WATCH_LIMIT_SECONDS,
@@ -38,9 +34,6 @@ import {
 // Every function takes the database first, so tests can hand in an in-memory
 // one. Uses positional parameters (project convention).
 
-export type Db = BetterSQLite3Database<typeof schema>;
-type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-type Queryable = Db | Tx;
 
 type Purchase = typeof purchases.$inferSelect;
 type Seat = typeof coupons.$inferSelect;
@@ -385,24 +378,6 @@ export function buyerRefundRequestUrl(
 }
 
 type User = typeof users.$inferSelect;
-
-function toRecipient(user: User): RecipientUser {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    timezone: user.timezone,
-    locale: user.locale,
-  };
-}
-
-function toActor(user: User): NotificationActor {
-  return { id: user.id, name: user.name, avatarUrl: user.avatarUrl };
-}
-
-function getUser(db: Queryable, userId: number) {
-  return db.select().from(users).where(eq(users.id, userId)).get();
-}
 
 function getCourse(db: Queryable, courseId: number) {
   return db.select().from(courses).where(eq(courses.id, courseId)).get();

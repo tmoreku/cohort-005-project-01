@@ -25,7 +25,7 @@ import {
 } from "~/lib/refunds.server";
 import { alreadyDecidedNotice, RULE_BREAK_LABELS } from "~/lib/refund-rules";
 import { useHighlightOnArrival } from "~/lib/use-highlight-on-arrival";
-import { sendNotification } from "~/lib/notifier.server";
+import { sendNotifications } from "~/lib/notifier.server";
 
 const refundFilterSchema = z
   .nativeEnum(RefundStatus)
@@ -147,7 +147,7 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ error: result.error }, { status: result.status });
   }
 
-  await sendNotification(result.notification);
+  await sendNotifications([result.notification]);
 
   return {
     success: true,

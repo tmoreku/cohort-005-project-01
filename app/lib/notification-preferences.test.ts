@@ -11,15 +11,15 @@ const kindsFor = (person: Parameters<typeof preferenceRowsFor>[0]) =>
 
 describe("preferenceRowsFor", () => {
   it("gives a Student the refund decisions and Discussion Reply", () => {
-    expect(kindsFor({ role: UserRole.Student, isTeamAdmin: false })).toEqual([
+    expect(kindsFor({ role: UserRole.Student, boughtTeamLicence: false })).toEqual([
       "refund-request-approved",
       "refund-request-declined",
       "discussion-reply",
     ]);
   });
 
-  it("adds Seat claimed for a Student who is a Team Admin", () => {
-    expect(kindsFor({ role: UserRole.Student, isTeamAdmin: true })).toEqual([
+  it("adds Seat claimed for a Student who bought a Team Licence", () => {
+    expect(kindsFor({ role: UserRole.Student, boughtTeamLicence: true })).toEqual([
       "refund-request-approved",
       "refund-request-declined",
       "discussion-reply",
@@ -28,21 +28,21 @@ describe("preferenceRowsFor", () => {
   });
 
   it("gives an Instructor only Discussion Question asked", () => {
-    expect(kindsFor({ role: UserRole.Instructor, isTeamAdmin: false })).toEqual(
+    expect(kindsFor({ role: UserRole.Instructor, boughtTeamLicence: false })).toEqual(
       ["discussion-question-asked"]
     );
   });
 
   it("gives a Platform Admin only Refund Request opened", () => {
-    expect(kindsFor({ role: UserRole.Admin, isTeamAdmin: false })).toEqual([
+    expect(kindsFor({ role: UserRole.Admin, boughtTeamLicence: false })).toEqual([
       "refund-request-opened",
     ]);
   });
 
   it("never has a row for Refund request received", () => {
     for (const role of Object.values(UserRole)) {
-      for (const isTeamAdmin of [false, true]) {
-        expect(kindsFor({ role, isTeamAdmin })).not.toContain(
+      for (const boughtTeamLicence of [false, true]) {
+        expect(kindsFor({ role, boughtTeamLicence })).not.toContain(
           "refund-request-received"
         );
       }
@@ -52,7 +52,7 @@ describe("preferenceRowsFor", () => {
 
 const studentRows = preferenceRowsFor({
   role: UserRole.Student,
-  isTeamAdmin: true,
+  boughtTeamLicence: true,
 });
 
 describe("readPreferences", () => {

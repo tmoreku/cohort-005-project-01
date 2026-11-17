@@ -2,11 +2,17 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { users } from "~/db/schema";
+import {
+  knockApi,
+  knockServerEnv,
+  type KnockServerEnv,
+} from "~/lib/knock-api.server";
 import type { TimezoneAndLocale } from "~/lib/timezone-and-locale";
 
 // ─── Notifications ───
 // Cadence sends Notifications through Knock (docs/adr/0013). Domain functions
-// return the Notifications to send; routes hand them to a Notifier.
+// return the Notifications to send; routes hand them to sendNotifications
+// after the database write.
 //
 // With KNOCK_SECRET_API_KEY set, the Knock notifier triggers one workflow per
 // kind. Without it (fresh checkouts, tests), each Notification is written to
@@ -92,10 +98,6 @@ export function toKnockRecipient(
 
 // ─── Notifiers ───
 
-const KNOCK_API_URL = "https://api.knock.app/v1";
-
-// Knock's trigger endpoint is one POST, so this calls it with fetch rather
-// than pulling in the Knock SDK.
 export function knockNotifier(
   secretApiKey: string,
   recipientOptions: RecipientOptions
@@ -105,24 +107,18 @@ export function knockNotifier(
       const { kind, recipients, actor, url, data } = notification;
       if (recipients.length === 0) return;
 
-      const response = await fetch(
-        `${KNOCK_API_URL}/workflows/${encodeURIComponent(kind)}/trigger`,
+      const response = await knockApi(
+        secretApiKey,
+        "POST",
+        `/workflows/${encodeURIComponent(kind)}/trigger`,
         {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${secretApiKey}`,
-          },
-          body: JSON.stringify({
-            recipients: recipients.map((user) =>
-              toKnockRecipient(user, recipientOptions)
-            ),
-            actor: { id: String(actor.id), name: actor.name },
-            // NotificationData can't hold `actor` or `url`, so nothing in
-            // `data` is overwritten here.
-            data: { ...data, actor, url },
-          }),
+          recipients: recipients.map((user) =>
+            toKnockRecipient(user, recipientOptions)
+          ),
+          actor: { id: String(actor.id), name: actor.name },
+          // NotificationData can't hold `actor` or `url`, so nothing in
+          // `data` is overwritten here.
+          data: { ...data, actor, url },
         }
       );
 
@@ -156,10 +152,7 @@ export function recordingNotifier(directory?: string): RecordingNotifier {
   };
 }
 
-export type NotifierConfig = {
-  knockSecretApiKey: string | undefined;
-  localDirectory: string;
-} & RecipientOptions;
+export type NotifierConfig = KnockServerEnv & { localDirectory: string };
 
 export function createNotifier(config: NotifierConfig): Notifier {
   if (!config.knockSecretApiKey) {
@@ -179,10 +172,8 @@ export function createNotifier(config: NotifierConfig): Notifier {
 
 // Built once, from the environment, when the server starts.
 const defaultNotifier = createNotifier({
-  knockSecretApiKey: process.env.KNOCK_SECRET_API_KEY,
+  ...knockServerEnv(),
   localDirectory: join(".outbox", "notifications"),
-  production: process.env.NODE_ENV === "production",
-  devEmailTo: process.env.DEV_EMAIL_TO,
 });
 
 // Creates or updates the person in Knock. Triggers carry recipients inline,
@@ -191,26 +182,16 @@ const defaultNotifier = createNotifier({
 // Without KNOCK_SECRET_API_KEY it does nothing.
 export async function upsertKnockRecipient(
   user: RecipientUser,
-  config: Omit<NotifierConfig, "localDirectory"> = {
-    knockSecretApiKey: process.env.KNOCK_SECRET_API_KEY,
-    production: process.env.NODE_ENV === "production",
-    devEmailTo: process.env.DEV_EMAIL_TO,
-  }
+  config: KnockServerEnv = knockServerEnv()
 ): Promise<void> {
   if (!config.knockSecretApiKey) return;
   const { id, ...properties } = toKnockRecipient(user, config);
 
-  const response = await fetch(
-    `${KNOCK_API_URL}/users/${encodeURIComponent(id)}`,
-    {
-      method: "PUT",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.knockSecretApiKey}`,
-      },
-      body: JSON.stringify(properties),
-    }
+  const response = await knockApi(
+    config.knockSecretApiKey,
+    "PUT",
+    `/users/${encodeURIComponent(id)}`,
+    properties
   );
 
   if (!response.ok) {
@@ -218,9 +199,27 @@ export async function upsertKnockRecipient(
   }
 }
 
-export async function sendNotification(
-  notification: NotificationToSend,
+// ─── Sending ───
+
+/**
+ * The one sending policy for every caller. It runs after the database write,
+ * so it never fails the request: each Notification is sent on its own, and
+ * one that fails is logged without stopping the others. Delivery isn't
+ * guaranteed (spec #21): no outbox, no retries.
+ */
+export async function sendNotifications(
+  notifications: NotificationToSend[],
   notifier: Notifier = defaultNotifier
 ): Promise<void> {
-  await notifier.send(notification);
+  const results = await Promise.allSettled(
+    notifications.map((notification) => notifier.send(notification))
+  );
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.error(
+        `Could not send the ${notifications[index].kind} Notification`,
+        result.reason
+      );
+    }
+  });
 }

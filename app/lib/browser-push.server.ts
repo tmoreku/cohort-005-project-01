@@ -1,3 +1,4 @@
+import { knockApi, knockServerEnv } from "~/lib/knock-api.server";
 import {
   toKnockRecipient,
   upsertKnockRecipient,
@@ -11,8 +12,6 @@ import {
 // Knock's endpoint addresses by the channel's UUID (KNOCK_FCM_CHANNEL_ID),
 // not its key. Knock's "Token deregistration" removes tokens FCM rejects, so
 // Cadence has no cleanup of its own (docs/adr/0013).
-
-const KNOCK_API_URL = "https://api.knock.app/v1";
 
 // The workflow "Send a test notification" triggers: one push step, no
 // preferences, not a Notification kind.
@@ -30,15 +29,10 @@ type Env = Record<string, string | undefined>;
 export function knockPushConfig(
   env: Env = process.env
 ): KnockPushConfig | null {
-  const knockSecretApiKey = env.KNOCK_SECRET_API_KEY;
+  const { knockSecretApiKey, ...recipientOptions } = knockServerEnv(env);
   const fcmChannelId = env.KNOCK_FCM_CHANNEL_ID;
   if (!knockSecretApiKey || !fcmChannelId) return null;
-  return {
-    knockSecretApiKey,
-    fcmChannelId,
-    production: env.NODE_ENV === "production",
-    devEmailTo: env.DEV_EMAIL_TO,
-  };
+  return { knockSecretApiKey, fcmChannelId, ...recipientOptions };
 }
 
 // What the browser needs to get an FCM token: the Firebase web app's public
@@ -78,22 +72,6 @@ export function browserPushConfig(
   };
 }
 
-async function knockRequest(
-  config: KnockPushConfig,
-  path: string,
-  init: { method: "GET" | "PUT" | "POST"; body?: unknown }
-): Promise<Response> {
-  return fetch(`${KNOCK_API_URL}${path}`, {
-    method: init.method,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.knockSecretApiKey}`,
-    },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
-}
-
 function channelDataPath(userId: number, config: KnockPushConfig) {
   return `/users/${encodeURIComponent(String(userId))}/channel_data/${encodeURIComponent(config.fcmChannelId)}`;
 }
@@ -102,9 +80,11 @@ async function readTokens(
   userId: number,
   config: KnockPushConfig
 ): Promise<string[]> {
-  const response = await knockRequest(config, channelDataPath(userId, config), {
-    method: "GET",
-  });
+  const response = await knockApi(
+    config.knockSecretApiKey,
+    "GET",
+    channelDataPath(userId, config)
+  );
   // No channel data yet (or no such user): no tokens.
   if (response.status === 404) return [];
   if (!response.ok) {
@@ -131,10 +111,12 @@ async function writeTokens(
   tokens: string[],
   config: KnockPushConfig
 ): Promise<void> {
-  const response = await knockRequest(config, channelDataPath(userId, config), {
-    method: "PUT",
-    body: { data: { tokens } },
-  });
+  const response = await knockApi(
+    config.knockSecretApiKey,
+    "PUT",
+    channelDataPath(userId, config),
+    { data: { tokens } }
+  );
   if (!response.ok) {
     throw new Error(`Knock refused to save push tokens: ${response.status}`);
   }
@@ -198,15 +180,13 @@ export async function sendTestPush(
   user: RecipientUser,
   config: KnockPushConfig
 ): Promise<void> {
-  const response = await knockRequest(
-    config,
+  const response = await knockApi(
+    config.knockSecretApiKey,
+    "POST",
     `/workflows/${BROWSER_PUSH_TEST_WORKFLOW}/trigger`,
     {
-      method: "POST",
-      body: {
-        recipients: [toKnockRecipient(user, config)],
-        data: { url: "/settings#browser-notifications" },
-      },
+      recipients: [toKnockRecipient(user, config)],
+      data: { url: "/settings#browser-notifications" },
     }
   );
   if (!response.ok) {

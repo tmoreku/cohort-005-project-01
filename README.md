@@ -82,7 +82,19 @@ It needs to be public: GitHub Actions minutes are free on public repos, and the 
 You don't need these yet, but you'll be asked for them along the way. Both have a free option:
 
 - **[Knock](https://knock.app/)**, a free Developer account, when you build notifications. Its keys go in `.env`, which is gitignored.
-  Once you have the account, run `bash scripts/knock-cli-wizard.sh`. It walks you through creating a Knock service token (so agents can push workflows with the Knock CLI) and saving the `web-push-fcm` channel ID to `.env`.
+  Once you have the account, run `bash scripts/knock-cli-wizard.sh`. It walks you through creating a Knock service token (so agents can push workflows with the Knock CLI) and saving the `web-push-fcm` and Feed channel IDs to `.env`.
+  Without these, Cadence still runs: Notifications are written to `.outbox/notifications/` instead of sent, and there's no Feed or browser push.
+
+  | Variable                                                                                                                  | What it's for                                                                         |
+  | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+  | `KNOCK_SECRET_API_KEY`                                                                                                    | Sending Notifications, and server calls to Knock                                      |
+  | `KNOCK_PUBLIC_API_KEY`, `KNOCK_SIGNING_KEY`                                                                               | The browser talking to Knock as the signed-in person (Feed, Notification Preferences) |
+  | `KNOCK_FEED_CHANNEL_ID`                                                                                                   | The Notification Feed (the `in-app` channel's ID)                                     |
+  | `KNOCK_FCM_CHANNEL_ID`                                                                                                    | Browser push (the `web-push-fcm` channel's ID)                                        |
+  | `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_MESSAGING_SENDER_ID`, `FIREBASE_APP_ID`, `FIREBASE_VAPID_PUBLIC_KEY` | Browser push: the Firebase web app's config and the VAPID public key                  |
+  | `DEV_EMAIL_TO` (optional)                                                                                                 | Development only: every email goes here. Unset means no emails                        |
+  | `KNOCK_SERVICE_TOKEN`                                                                                                     | `npm run knock:push`, which pushes `knock/` to Knock Development                      |
+
 - **[tldraw](https://www.tldraw.com/)**, for whiteboarding your tasks. Any drawing app will do.
 
 ## Scripts
