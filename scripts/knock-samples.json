@@ -33,7 +33,7 @@
     "data": {
       "url": "/settings#refund-request-7",
       "actor": { "id": 1, "name": "Alex Admin", "avatarUrl": null },
-      "adminName": "Alex Admin",
+      "platformAdminName": "Alex Admin",
       "courseTitle": "What is TypeScript?",
       "amount": "$149.00",
       "note": "Sorry it wasn't the right fit, hope to see you back.",
@@ -46,7 +46,7 @@
     "data": {
       "url": "/team#team-licence-5",
       "actor": { "id": 1, "name": "Alex Admin", "avatarUrl": null },
-      "adminName": "Alex Admin",
+      "platformAdminName": "Alex Admin",
       "courseTitle": "Full-Stack React Router",
       "note": "You've finished 14 of the 18 lessons, which is past the point where we can refund.\n\nIf module 2 is the sticking point, ask a question on the lesson: the Instructor answers them.",
       "decidedAt": "2026-11-17T10:05:00Z"

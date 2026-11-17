@@ -880,7 +880,7 @@ function buildDecisionNotification(
       purchase.id
     ),
     data: {
-      adminName: platformAdmin.name,
+      platformAdminName: platformAdmin.name,
       courseTitle: course.title,
       amount: formatPrice(purchase.amountPaid),
       reason: refundRequest.reason,

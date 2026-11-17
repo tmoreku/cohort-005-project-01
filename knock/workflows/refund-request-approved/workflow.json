@@ -76,9 +76,6 @@
       "actor": {
         "$ref": "#/$defs/actor"
       },
-      "adminName": {
-        "type": "string"
-      },
       "amount": {
         "type": "string"
       },
@@ -95,6 +92,9 @@
           "null"
         ]
       },
+      "platformAdminName": {
+        "type": "string"
+      },
       "url": {
         "type": "string"
       }
@@ -102,7 +102,7 @@
     "required": [
       "url",
       "actor",
-      "adminName",
+      "platformAdminName",
       "courseTitle",
       "amount",
       "note",

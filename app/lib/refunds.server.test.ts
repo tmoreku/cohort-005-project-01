@@ -531,7 +531,7 @@ describe("approving a Refund Request", () => {
       actor: { id: platformAdmin.id, name: "Pat Admin", avatarUrl: null },
       url: `/settings#refund-request-${id}`,
       data: {
-        adminName: "Pat Admin",
+        platformAdminName: "Pat Admin",
         courseTitle: "Test Course",
         amount: "$79.00",
         reason: "It was not what I expected.",
@@ -621,7 +621,7 @@ describe("declining a Refund Request", () => {
       actor: { id: platformAdmin.id, name: "Pat Admin", avatarUrl: null },
       url: `/settings#refund-request-${id}`,
       data: {
-        adminName: "Pat Admin",
+        platformAdminName: "Pat Admin",
         courseTitle: "Test Course",
         amount: "$79.00",
         reason: "It was not what I expected.",
