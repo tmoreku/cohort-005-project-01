@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useLocation } from "react-router";
 import { toast } from "sonner";
 import { MessageSquare, Pencil, Reply, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -7,7 +7,13 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
 import { UserAvatar } from "~/components/user-avatar";
 import { cn, formatRelativeTime } from "~/lib/utils";
-import { MAX_COMMENT_LENGTH } from "~/lib/comments";
+import {
+  MAX_COMMENT_LENGTH,
+  discussionQuestionAnchor,
+  discussionReplyAnchor,
+  parseDiscussionTarget,
+  type DiscussionTarget,
+} from "~/lib/comments";
 
 // Bodies arrive pre-rendered from the server (renderComment), because comments
 // are untrusted markdown and the sanitising renderer is server-only.
@@ -224,8 +230,14 @@ function CommentItem({
     );
   }
 
+  // Only items still showing get an anchor: a Notification about a deleted
+  // one gets the "no longer available" notice instead.
+  const anchor = isReply
+    ? discussionReplyAnchor(comment.id)
+    : discussionQuestionAnchor(comment.id);
+
   return (
-    <div className={cn("py-3", isReply && "border-l pl-4")}>
+    <div id={anchor} className={cn("py-3", isReply && "border-l pl-4")}>
       <div className="flex items-start gap-3">
         <UserAvatar
           name={comment.author.name}
@@ -338,6 +350,35 @@ function Replies({
   );
 }
 
+// Whether a Notification's target is still on the page. A deleted Discussion
+// Question can still show (as a placeholder holding its Discussion Replies),
+// but it no longer counts as there.
+function isShowing(comments: RenderedComment[], target: DiscussionTarget) {
+  return comments.some((question) => {
+    if (target.kind === "question") {
+      return question.id === target.commentId && !question.deleted;
+    }
+    return question.replies.some(
+      (reply) => reply.id === target.commentId && !reply.deleted
+    );
+  });
+}
+
+function UnavailableTargetNotice({ comments }: { comments: RenderedComment[] }) {
+  const { hash } = useLocation();
+  const target = parseDiscussionTarget(decodeURIComponent(hash));
+  if (!target || isShowing(comments, target)) return null;
+
+  return (
+    <div
+      role="status"
+      className="mb-4 rounded-lg border border-dashed bg-muted/50 p-4 text-sm text-muted-foreground"
+    >
+      This {target.kind} is no longer available.
+    </div>
+  );
+}
+
 export function CommentThread({
   comments,
   currentUserId,
@@ -359,6 +400,8 @@ export function CommentThread({
           <MessageSquare className="size-5 text-primary" />
           <h2 className="text-xl font-semibold">Questions &amp; Discussion</h2>
         </div>
+
+        <UnavailableTargetNotice comments={comments} />
 
         {comments.length === 0 ? (
           <div className="rounded-lg border border-dashed p-6 text-center">
