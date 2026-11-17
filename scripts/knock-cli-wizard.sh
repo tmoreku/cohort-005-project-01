@@ -200,7 +200,7 @@ finish() {
 
 run_wizard() {
 
-TOTAL_STAGES=4
+TOTAL_STAGES=6
 KNOCK_DASHBOARD="https://dashboard.knock.app"
 KNOCK_CLI=(npx --yes @knocklabs/cli@latest)
 
@@ -257,6 +257,33 @@ if [[ -n "${KNOCK_FCM_CHANNEL_ID:-}" ]]; then
 else
   SKIPPED+=("KNOCK_FCM_CHANNEL_ID in .env (needed by the web push tickets)")
 fi
+
+# ── Stage 5 ───────────────────────────────────────────────────────────────
+stage "Knock: in-app feed channel ID"
+say "The Notification Feed drawer connects to Knock's in-app feed channel by its UUID."
+open_url "$KNOCK_DASHBOARD"
+step "Switch to the Development environment."
+step "Open Integrations → Channels and click the in-app feed channel."
+step "Copy the channel's ID, a UUID such as 3f2c…-…"
+note "Without it (or KNOCK_PUBLIC_API_KEY / KNOCK_SIGNING_KEY), Cadence runs with no bell and no Feed."
+ask KNOCK_FEED_CHANNEL_ID "Paste the channel ID:" || true
+if [[ -n "${KNOCK_FEED_CHANNEL_ID:-}" ]]; then
+  write_env KNOCK_FEED_CHANNEL_ID "$KNOCK_FEED_CHANNEL_ID"
+else
+  SKIPPED+=("KNOCK_FEED_CHANNEL_ID in .env (needed by the Notification Feed)")
+fi
+
+# ── Stage 6 ───────────────────────────────────────────────────────────────
+stage "Knock: turn on Enhanced security mode"
+say "With it on, the browser can only read a Feed with a user token Cadence signed,"
+say "so nobody can read someone else's Notifications with the public API key alone."
+open_url "$KNOCK_DASHBOARD"
+step "Switch to the Development environment."
+step "Go to Platform → API keys and turn on 'Enhanced security mode'."
+step "If KNOCK_SIGNING_KEY isn't in .env yet, generate a signing key on the same page"
+step "and paste it into .env as KNOCK_SIGNING_KEY (the PEM or its base64 form)."
+warn "Do the same in Production when the Feed ships there."
+pause "Press Enter once Enhanced security mode is on."
 
 finish
 }
