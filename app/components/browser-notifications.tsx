@@ -24,7 +24,7 @@ import { PUSH_STATES, pushStateFor, type PushState } from "~/lib/browser-push";
 
 // Per-browser "Turn off for this browser" flag: stops the silent re-register.
 const TURNED_OFF_KEY = "cadence:browser-push:off";
-// The user this browser's token was last registered to (for #31).
+// The user this browser's token was last registered to.
 const REGISTERED_USER_KEY = "cadence:browser-push:user";
 // Development only: force a state to see how the card renders it (DevUI).
 const FORCED_STATE_KEY = "cadence:browser-push:force";
@@ -34,6 +34,9 @@ type BrowserPush = {
   // Set by the DevUI panel in development; actions do nothing while forced.
   forced: boolean;
   busy: boolean;
+  // This browser's FCM token once Firebase has given it, so logout and the
+  // DevUI switch can take it off the outgoing person (BrowserPushTokenField).
+  token: string | null;
   turnOn: () => void;
   turnOff: () => void;
   sendTest: () => void;
@@ -43,6 +46,7 @@ const NO_PUSH: BrowserPush = {
   state: "unavailable",
   forced: false,
   busy: false,
+  token: null,
   turnOn: () => {},
   turnOff: () => {},
   sendTest: () => {},
@@ -85,12 +89,14 @@ function SignedInBrowserPush({
   const [detected, setDetected] = useState<PushState>("checking");
   const [forcedState, setForcedState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
 
   const register = useCallback(
     async (pushConfig: BrowserPushConfig) => {
       setDetected("connecting");
       try {
         const token = await getFcmToken(pushConfig);
+        setToken(token);
         await postBrowserPush({ intent: "register", token });
         localStorage.removeItem(TURNED_OFF_KEY);
         localStorage.setItem(REGISTERED_USER_KEY, String(userId));
@@ -181,11 +187,23 @@ function SignedInBrowserPush({
 
   return (
     <BrowserPushContext.Provider
-      value={{ state, forced, busy, turnOn, turnOff, sendTest }}
+      value={{ state, forced, busy, token, turnOn, turnOff, sendTest }}
     >
       {children}
     </BrowserPushContext.Provider>
   );
+}
+
+// ─── Signing out ───
+// Goes inside the logout form and the DevUI switch-user forms: the action
+// removes this browser's token from the person signing out before the
+// session changes (only that person can be acted for). The next person's
+// provider registers it again if push is allowed here.
+
+export function BrowserPushTokenField() {
+  const { token } = useBrowserPush();
+  if (!token) return null;
+  return <input type="hidden" name="pushToken" value={token} />;
 }
 
 // ─── Browser ───
