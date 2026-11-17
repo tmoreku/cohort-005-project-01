@@ -27,6 +27,11 @@ import { getKnockUserAuth } from "~/lib/knock-token.server";
 import { upsertKnockRecipient } from "~/lib/notifier.server";
 import { preferenceRowsFor } from "~/lib/notification-preferences";
 import { NotificationPreferencesCard } from "~/components/notification-preferences";
+import {
+  BrowserNotificationsCard,
+  useBrowserPush,
+} from "~/components/browser-notifications";
+import { browserColumnFor } from "~/lib/browser-push";
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty."),
@@ -141,6 +146,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
     (refundRequest) => refundRequest.status === RefundStatus.Open
   ).length;
   const fetcher = useFetcher();
+  const browserPush = useBrowserPush();
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -272,11 +278,12 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </Card>
       )}
 
-      {/* #30 adds the Browser notifications card (#browser-notifications) just above. */}
+      <BrowserNotificationsCard />
       <NotificationPreferencesCard
         userId={user.id}
         rows={preferenceRows}
         knock={knock}
+        browser={browserColumnFor(browserPush.state)}
       />
     </div>
   );

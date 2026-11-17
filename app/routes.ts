@@ -56,4 +56,5 @@ export default [
   route("api/set-dev-country", "routes/api.set-dev-country.ts"),
   route("api/user-locale", "routes/api.user-locale.ts"),
   route("api/knock-token", "routes/api.knock-token.ts"),
+  route("api/browser-push", "routes/api.browser-push.ts"),
 ] satisfies RouteConfig;

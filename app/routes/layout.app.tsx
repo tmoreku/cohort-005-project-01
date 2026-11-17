@@ -9,6 +9,8 @@ import {
   NotificationsNavItem,
 } from "~/components/notification-feed";
 import { getKnockFeedConfig } from "~/lib/knock-token.server";
+import { BrowserPushProvider } from "~/components/browser-notifications";
+import { browserPushConfig } from "~/lib/browser-push.server";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
 import { useBrowserTimezoneAndLocale } from "~/lib/use-browser-timezone-and-locale";
@@ -229,6 +231,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     isTeamAdmin: currentUserId ? isTeamAdmin(currentUserId) : false,
     // Signed in and Knock configured: what the Notification Feed needs.
     knockFeed: currentUser ? await getKnockFeedConfig(currentUser.id) : null,
+    // Signed in and Knock push + Firebase configured: what web push needs.
+    browserPush: currentUser ? browserPushConfig() : null,
   };
 }
 
@@ -242,33 +246,36 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     countries,
     isTeamAdmin: userIsTeamAdmin,
     knockFeed,
+    browserPush,
   } = loaderData;
 
   useBrowserTimezoneAndLocale(currentUser);
   useHighlightOnArrival();
 
   return (
-    <NotificationFeed userId={currentUser?.id ?? null} config={knockFeed}>
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          currentUser={currentUser}
-          recentCourses={recentCourses}
-          isTeamAdmin={userIsTeamAdmin}
-          headerSlot={<NotificationBell />}
-          navSlot={<NotificationsNavItem />}
-        />
-        <main className="flex-1 overflow-y-auto">
-          <Outlet />
-        </main>
-        <DevUI
-          users={users}
-          currentUser={currentUser}
-          devCountry={devCountry}
-          countryTierInfo={countryTierInfo}
-          countries={countries}
-        />
-        <Toaster position="bottom-right" richColors closeButton />
-      </div>
-    </NotificationFeed>
+    <BrowserPushProvider userId={currentUser?.id ?? null} config={browserPush}>
+      <NotificationFeed userId={currentUser?.id ?? null} config={knockFeed}>
+        <div className="flex h-screen overflow-hidden">
+          <Sidebar
+            currentUser={currentUser}
+            recentCourses={recentCourses}
+            isTeamAdmin={userIsTeamAdmin}
+            headerSlot={<NotificationBell />}
+            navSlot={<NotificationsNavItem />}
+          />
+          <main className="flex-1 overflow-y-auto">
+            <Outlet />
+          </main>
+          <DevUI
+            users={users}
+            currentUser={currentUser}
+            devCountry={devCountry}
+            countryTierInfo={countryTierInfo}
+            countries={countries}
+          />
+          <Toaster position="bottom-right" richColors closeButton />
+        </div>
+      </NotificationFeed>
+    </BrowserPushProvider>
   );
 }

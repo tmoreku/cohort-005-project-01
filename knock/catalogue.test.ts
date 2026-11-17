@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { BROWSER_PUSH_TEST_WORKFLOW } from "~/lib/browser-push.server";
 import { NOTIFICATION_CATALOGUE } from "~/lib/notification-catalogue";
 
 // The Knock workflows in this directory are pushed to Knock as they are, so
@@ -52,10 +53,24 @@ const samples = z
   );
 
 describe("Knock workflows", () => {
-  it("has one workflow per Notification kind and no others", () => {
+  it("has one workflow per Notification kind, plus the browser push test", () => {
     const dirs = readdirSync(workflowsDir).sort();
-    const keys = NOTIFICATION_CATALOGUE.map((k) => k.workflowKey).sort();
+    const keys = [
+      ...NOTIFICATION_CATALOGUE.map((k) => k.workflowKey),
+      BROWSER_PUSH_TEST_WORKFLOW,
+    ].sort();
     expect(dirs).toEqual(keys);
+  });
+
+  // "Send a test notification" on Settings: web push only, whatever the
+  // person's Notification Preferences say.
+  it("sends the browser push test by web push only, ignoring preferences", () => {
+    const workflow = readWorkflow(BROWSER_PUSH_TEST_WORKFLOW);
+    expect(
+      workflow.steps.map((s) => [s.channel_type, s.channel_key])
+    ).toEqual([["push", "web-push-fcm"]]);
+    expect(workflow.settings?.override_preferences).toBe(true);
+    expect(workflow.trigger_data_json_schema.required).toEqual(["url"]);
   });
 
   for (const kind of NOTIFICATION_CATALOGUE) {

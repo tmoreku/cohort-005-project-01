@@ -200,7 +200,7 @@ finish() {
 
 run_wizard() {
 
-TOTAL_STAGES=8
+TOTAL_STAGES=10
 KNOCK_DASHBOARD="https://dashboard.knock.app"
 KNOCK_CLI=(npx --yes @knocklabs/cli@latest)
 
@@ -329,6 +329,38 @@ else
     SKIPPED+=("npm run knock:push failed: fix it and re-run the wizard")
   fi
 fi
+
+# ── Stage 9 ───────────────────────────────────────────────────────────────
+stage "Knock: web-push-fcm is connected to Firebase, with Token deregistration on"
+say "Knock sends each push step through FCM, so the channel needs your Firebase"
+say "project's service account. Token deregistration lets Knock drop dead tokens:"
+say "Cadence has no cleanup code of its own."
+open_url "$KNOCK_DASHBOARD"
+step "Switch to the Development environment."
+step "Open Integrations → Channels → 'web-push-fcm' → Manage configuration."
+step "Check a Firebase service account JSON is saved (from Firebase console →"
+step "Project settings → Service accounts → Generate new private key, for cadence-dev)."
+step "Check 'Token deregistration' is turned on, then save."
+confirm "Is web-push-fcm connected to Firebase with Token deregistration on?" \
+  || SKIPPED+=("web-push-fcm in Knock Development: add the Firebase service account and turn on Token deregistration")
+
+# ── Stage 10 ──────────────────────────────────────────────────────────────
+stage "Browser push: check it end to end in Chrome"
+for key in FIREBASE_API_KEY FIREBASE_PROJECT_ID FIREBASE_MESSAGING_SENDER_ID FIREBASE_APP_ID FIREBASE_VAPID_PUBLIC_KEY KNOCK_FCM_CHANNEL_ID; do
+  [[ -n "$(_existing "$key")" ]] || warn "$key isn't in $ENV_FILE: Settings will say browser notifications aren't available."
+done
+say "Start Cadence (npm run dev) and pick a Student, e.g. Emma Wilson, in the DevUI panel."
+step "In Chrome, open http://localhost:5173/settings#browser-notifications."
+step "Click 'Turn on for this browser' and allow notifications when Chrome asks."
+step "The card should say 'On for this browser'. Click 'Send a test notification'."
+step "A 'Test notification from Cadence' pop-up should appear; clicking it opens Settings."
+step "Then post a Discussion Reply as someone else to one of that Student's questions:"
+step "the reply should pop up, and clicking it should open the lesson on that reply."
+step "Click 'Turn off for this browser', reload: it should stay off."
+note "Nothing pops up? Knock (Development) → Logs → Messages shows each push and FCM's answer."
+note "Each card state can also be forced from the DevUI panel ('Browser push state')."
+confirm "Did the test notification and the Discussion Reply arrive as browser notifications?" \
+  || SKIPPED+=("Browser push didn't arrive: check Knock Development's message logs for web-push-fcm")
 
 finish
 }
