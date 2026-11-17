@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { users } from "~/db/schema";
+import type { TimezoneAndLocale } from "~/lib/timezone-and-locale";
 
 // ─── Notifications ───
 // Cadence sends Notifications through Knock (docs/adr/0013). Domain functions
@@ -9,7 +11,8 @@ import type { users } from "~/db/schema";
 // With KNOCK_SECRET_API_KEY set, the Knock notifier triggers one workflow per
 // kind. Without it (fresh checkouts, tests), each Notification is written to
 // .outbox/notifications/ as a JSON file instead, so nothing is sent and
-// nothing throws.
+// nothing throws. In production that fallback also logs an error, since it
+// means nobody is being notified.
 
 // One Knock workflow per kind; the kind is the workflow key.
 export type NotificationKind =
@@ -27,14 +30,22 @@ export type NotificationActor = {
   avatarUrl: string | null;
 };
 
+// Kind-specific fields. `actor` and `url` are top-level fields of every
+// Notification and are added to the workflow data by the notifier, so the
+// type keeps them out of here rather than letting one silently replace the
+// other.
+export type NotificationData = Record<string, unknown> & {
+  actor?: never;
+  url?: never;
+};
+
 export type NotificationToSend = {
   kind: NotificationKind;
   recipients: RecipientUser[];
   actor: NotificationActor;
   // The one target shared by the Feed row, the email button and push.
   url: string;
-  // Kind-specific fields.
-  data: Record<string, unknown>;
+  data: NotificationData;
 };
 
 export interface Notifier {
@@ -43,19 +54,20 @@ export interface Notifier {
 
 // ─── Recipients ───
 
+// A Cadence user a Notification goes to (the spec's name for it).
 export type RecipientUser = Pick<
   typeof users.$inferSelect,
-  "id" | "name" | "email" | "timezone" | "locale"
->;
+  "id" | "name" | "email"
+> &
+  TimezoneAndLocale;
 
-// What Knock receives inline with each trigger; Knock upserts it.
+// What Knock receives inline with each trigger; Knock upserts it. Unknown
+// timezone and locale are left out rather than sent as null.
 export type KnockRecipient = {
   id: string;
   name: string;
   email?: string;
-  timezone?: string;
-  locale?: string;
-};
+} & { [K in keyof TimezoneAndLocale]?: NonNullable<TimezoneAndLocale[K]> };
 
 export type RecipientOptions = {
   production: boolean;
@@ -107,6 +119,8 @@ export function knockNotifier(
               toKnockRecipient(user, recipientOptions)
             ),
             actor: { id: String(actor.id), name: actor.name },
+            // NotificationData can't hold `actor` or `url`, so nothing in
+            // `data` is overwritten here.
             data: { ...data, actor, url },
           }),
         }
@@ -121,11 +135,11 @@ export function knockNotifier(
   };
 }
 
-export type FakeNotifier = Notifier & { sent: NotificationToSend[] };
+export type RecordingNotifier = Notifier & { sent: NotificationToSend[] };
 
 // Keeps every Notification in memory. Given a directory, it also writes each
 // one there as a JSON file, which is how Cadence runs without Knock keys.
-export function fakeNotifier(directory?: string): FakeNotifier {
+export function recordingNotifier(directory?: string): RecordingNotifier {
   const sent: NotificationToSend[] = [];
   return {
     sent,
@@ -133,7 +147,10 @@ export function fakeNotifier(directory?: string): FakeNotifier {
       sent.push(notification);
       if (!directory) return;
       mkdirSync(directory, { recursive: true });
-      const file = join(directory, `${Date.now()}-${notification.kind}.json`);
+      const file = join(
+        directory,
+        `${Date.now()}-${randomUUID()}-${notification.kind}.json`
+      );
       writeFileSync(file, JSON.stringify(notification, null, 2));
     },
   };
@@ -142,30 +159,35 @@ export function fakeNotifier(directory?: string): FakeNotifier {
 export type NotifierConfig = {
   knockSecretApiKey: string | undefined;
   localDirectory: string;
-  production?: boolean;
-  devEmailTo?: string;
-};
+} & RecipientOptions;
 
 export function createNotifier(config: NotifierConfig): Notifier {
-  if (!config.knockSecretApiKey) return fakeNotifier(config.localDirectory);
+  if (!config.knockSecretApiKey) {
+    // Sending happens after the database write, so this mustn't throw.
+    if (config.production) {
+      console.error(
+        `KNOCK_SECRET_API_KEY is not set in production: Notifications are not being sent, only recorded in ${config.localDirectory}.`
+      );
+    }
+    return recordingNotifier(config.localDirectory);
+  }
   return knockNotifier(config.knockSecretApiKey, {
-    production: config.production ?? false,
+    production: config.production,
     devEmailTo: config.devEmailTo,
   });
 }
 
-function defaultNotifier(): Notifier {
-  return createNotifier({
-    knockSecretApiKey: process.env.KNOCK_SECRET_API_KEY,
-    localDirectory: join(".outbox", "notifications"),
-    production: process.env.NODE_ENV === "production",
-    devEmailTo: process.env.DEV_EMAIL_TO,
-  });
-}
+// Built once, from the environment, when the server starts.
+const defaultNotifier = createNotifier({
+  knockSecretApiKey: process.env.KNOCK_SECRET_API_KEY,
+  localDirectory: join(".outbox", "notifications"),
+  production: process.env.NODE_ENV === "production",
+  devEmailTo: process.env.DEV_EMAIL_TO,
+});
 
 export async function sendNotification(
   notification: NotificationToSend,
-  notifier: Notifier = defaultNotifier()
+  notifier: Notifier = defaultNotifier
 ): Promise<void> {
   await notifier.send(notification);
 }

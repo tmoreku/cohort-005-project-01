@@ -1,10 +1,10 @@
 import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createNotifier,
-  fakeNotifier,
+  recordingNotifier,
   sendNotification,
   toKnockRecipient,
   type NotificationToSend,
@@ -83,13 +83,22 @@ const discussionReply: NotificationToSend = {
   data: { lessonTitle: "Generics" },
 };
 
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
 describe("sendNotification", () => {
   it("records the Notification locally when there is no Knock secret key", async () => {
     const directory = mkdtempSync(join(tmpdir(), "notifications-"));
 
     await sendNotification(
       discussionReply,
-      createNotifier({ knockSecretApiKey: undefined, localDirectory: directory })
+      createNotifier({
+        knockSecretApiKey: undefined,
+        localDirectory: directory,
+        production: false,
+      })
     );
 
     const files = readdirSync(directory);
@@ -102,11 +111,56 @@ describe("sendNotification", () => {
     });
   });
 
-  it("keeps Notifications in memory with the fake notifier", async () => {
-    const notifier = fakeNotifier();
+  it("records two Notifications sent in the same millisecond as two files", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    const directory = mkdtempSync(join(tmpdir(), "notifications-"));
+    const notifier = recordingNotifier(directory);
+
+    await sendNotification(discussionReply, notifier);
+    await sendNotification(discussionReply, notifier);
+
+    expect(readdirSync(directory)).toHaveLength(2);
+  });
+
+  it("says loudly when production has no Knock secret key, without throwing", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const directory = mkdtempSync(join(tmpdir(), "notifications-"));
+
+    const notifier = createNotifier({
+      knockSecretApiKey: undefined,
+      localDirectory: directory,
+      production: true,
+    });
+    await sendNotification(discussionReply, notifier);
+
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("KNOCK_SECRET_API_KEY")
+    );
+    expect(readdirSync(directory)).toHaveLength(1);
+  });
+
+  it("keeps Notifications in memory with the recording notifier", async () => {
+    const notifier = recordingNotifier();
 
     await sendNotification(discussionReply, notifier);
 
     expect(notifier.sent).toEqual([discussionReply]);
+  });
+});
+
+describe("NotificationToSend", () => {
+  it("keeps actor and url out of the kind-specific data", () => {
+    const withActorInData: NotificationToSend = {
+      ...discussionReply,
+      // @ts-expect-error actor is a top-level field, so data can't carry one
+      data: { actor: "someone else" },
+    };
+    const withUrlInData: NotificationToSend = {
+      ...discussionReply,
+      // @ts-expect-error url is a top-level field, so data can't carry one
+      data: { url: "/elsewhere" },
+    };
+    expect([withActorInData, withUrlInData]).toHaveLength(2);
   });
 });
