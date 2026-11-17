@@ -51,6 +51,10 @@ export const users = sqliteTable("users", {
   role: text("role").notNull().$type<UserRole>(),
   avatarUrl: text("avatar_url"),
   bio: text("bio"),
+  // Detected by the browser on app load; null until first seen. Never edited
+  // by hand and never derived from the Dev Country.
+  timezone: text("timezone"), // IANA, e.g. "Europe/London"
+  locale: text("locale"), // BCP 47, e.g. "en-GB"
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),

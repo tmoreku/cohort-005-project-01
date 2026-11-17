@@ -12,7 +12,15 @@ import { Textarea } from "~/components/ui/textarea";
 import { UserAvatar } from "~/components/user-avatar";
 import { AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react";
 import { cn, daysSince, formatRelativeTime } from "~/lib/utils";
-import { MIN_COMMENT_LENGTH, MAX_COMMENT_LENGTH } from "~/lib/comments";
+import {
+  MAX_COMMENT_LENGTH,
+  discussionQuestionAnchor,
+} from "~/lib/comments";
+import {
+  getDiscussionComment,
+  postToDiscussion,
+  sendDiscussionNotifications,
+} from "~/lib/discussions.server";
 import { parseFormData } from "~/lib/validation";
 import { db } from "~/db";
 import {
@@ -96,10 +104,6 @@ function getUnansweredQuestions(instructorId: number | null): QueuedQuestion[] {
     .all();
 }
 
-function getCommentById(commentId: number) {
-  return db.select().from(comments).where(eq(comments.id, commentId)).get();
-}
-
 function getCourseForLesson(lessonId: number) {
   return db
     .select({
@@ -112,47 +116,6 @@ function getCourseForLesson(lessonId: number) {
     .innerJoin(modules, eq(lessons.moduleId, modules.id))
     .innerJoin(courses, eq(modules.courseId, courses.id))
     .where(eq(lessons.id, lessonId))
-    .get();
-}
-
-function createComment(
-  userId: number,
-  lessonId: number,
-  parentId: number | null,
-  body: string
-) {
-  const trimmed = body.trim();
-  if (trimmed.length < MIN_COMMENT_LENGTH) {
-    throw new Error("Comment cannot be empty");
-  }
-  if (trimmed.length > MAX_COMMENT_LENGTH) {
-    throw new Error(
-      `Comment must be ${MAX_COMMENT_LENGTH} characters or fewer`
-    );
-  }
-
-  const course = getCourseForLesson(lessonId);
-  if (!course) {
-    throw new Error("Lesson not found");
-  }
-
-  if (parentId !== null) {
-    const parent = getCommentById(parentId);
-    if (!parent) {
-      throw new Error("Parent comment not found");
-    }
-    if (parent.lessonId !== lessonId) {
-      throw new Error("Parent comment belongs to a different lesson");
-    }
-    if (parent.parentId !== null) {
-      throw new Error("Replies can only be one level deep");
-    }
-  }
-
-  return db
-    .insert(comments)
-    .values({ userId, lessonId, parentId, body: trimmed })
-    .returning()
     .get();
 }
 
@@ -193,7 +156,7 @@ export async function action({ request }: Route.ActionArgs) {
     return { ok: false, error: "Enter a reply before posting." };
   }
 
-  const question = getCommentById(parsed.data.commentId);
+  const question = getDiscussionComment(db, parsed.data.commentId);
   if (!question) {
     throw data("Question not found", { status: 404 });
   }
@@ -205,15 +168,20 @@ export async function action({ request }: Route.ActionArgs) {
 
   // Answering as the course's voice — so it must be the course's own
   // instructor, or an admin.
-  const access = await requireStaff(request, course.courseId);
+  const { userId } = await requireStaff(request, course.courseId);
+  if (!userId) {
+    throw data("Select a user from the DevUI panel.", { status: 401 });
+  }
 
   try {
-    createComment(
-      access.userId!,
+    const { notifications } = postToDiscussion(
+      db,
       question.lessonId,
+      userId,
       question.id,
       parsed.data.body
     );
+    await sendDiscussionNotifications(notifications);
   } catch (error) {
     if (error instanceof Error) {
       return { ok: false, error: error.message };
@@ -254,7 +222,7 @@ function QuestionCard({ question }: { question: Question }) {
           <span>/</span>
           <span>{question.lessonTitle}</span>
           <Link
-            to={`/courses/${question.courseSlug}/lessons/${question.lessonId}`}
+            to={`/courses/${question.courseSlug}/lessons/${question.lessonId}#${discussionQuestionAnchor(question.id)}`}
             className="inline-flex items-center gap-1 hover:text-foreground"
           >
             <ExternalLink className="size-3.5" />

@@ -3,8 +3,16 @@ import type { Route } from "./+types/layout.app";
 import { Sidebar } from "~/components/sidebar";
 import { DevUI } from "~/components/dev-ui";
 import { Toaster } from "sonner";
+import {
+  NotificationBell,
+  NotificationFeed,
+  NotificationsNavItem,
+} from "~/components/notification-feed";
+import { getKnockFeedConfig } from "~/lib/knock-token.server";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
+import { useBrowserTimezoneAndLocale } from "~/lib/use-browser-timezone-and-locale";
+import { useHighlightOnArrival } from "~/lib/use-highlight-on-arrival";
 import { eq, and, or, sql, desc } from "drizzle-orm";
 import { db } from "~/db";
 import {
@@ -185,7 +193,11 @@ export async function loader({ request }: Route.LoaderArgs) {
           course.courseId
         );
         const totalLessons = getTotalLessonCount(course.courseId);
-        const progress = calculateProgress(currentUserId, course.courseId, false);
+        const progress = calculateProgress(
+          currentUserId,
+          course.courseId,
+          false
+        );
         return {
           courseId: course.courseId,
           title: course.courseTitle,
@@ -206,6 +218,8 @@ export async function loader({ request }: Route.LoaderArgs) {
           name: currentUser.name,
           role: currentUser.role,
           avatarUrl: currentUser.avatarUrl ?? null,
+          timezone: currentUser.timezone,
+          locale: currentUser.locale,
         }
       : null,
     recentCourses,
@@ -213,6 +227,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     countryTierInfo,
     countries: COUNTRIES,
     isTeamAdmin: currentUserId ? isTeamAdmin(currentUserId) : false,
+    // Signed in and Knock configured: what the Notification Feed needs.
+    knockFeed: currentUser ? await getKnockFeedConfig(currentUser.id) : null,
   };
 }
 
@@ -225,26 +241,34 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     countryTierInfo,
     countries,
     isTeamAdmin: userIsTeamAdmin,
+    knockFeed,
   } = loaderData;
 
+  useBrowserTimezoneAndLocale(currentUser);
+  useHighlightOnArrival();
+
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        currentUser={currentUser}
-        recentCourses={recentCourses}
-        isTeamAdmin={userIsTeamAdmin}
-      />
-      <main className="flex-1 overflow-y-auto">
-        <Outlet />
-      </main>
-      <DevUI
-        users={users}
-        currentUser={currentUser}
-        devCountry={devCountry}
-        countryTierInfo={countryTierInfo}
-        countries={countries}
-      />
-      <Toaster position="bottom-right" richColors closeButton />
-    </div>
+    <NotificationFeed userId={currentUser?.id ?? null} config={knockFeed}>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar
+          currentUser={currentUser}
+          recentCourses={recentCourses}
+          isTeamAdmin={userIsTeamAdmin}
+          headerSlot={<NotificationBell />}
+          navSlot={<NotificationsNavItem />}
+        />
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+        <DevUI
+          users={users}
+          currentUser={currentUser}
+          devCountry={devCountry}
+          countryTierInfo={countryTierInfo}
+          countries={countries}
+        />
+        <Toaster position="bottom-right" richColors closeButton />
+      </div>
+    </NotificationFeed>
   );
 }
