@@ -1,0 +1,109 @@
+{
+  "name": "Seat claimed",
+  "description": "A Student claimed a Seat on a Team Licence. Sent to the Team Admin who bought it. Email is off by default (environment defaults); no web push.",
+  "steps": [
+    {
+      "name": "Feed",
+      "type": "channel",
+      "template": {
+        "action_url": "{{ data.url }}",
+        "markdown_body@": "in-app-feed/markdown_body.md"
+      },
+      "ref": "in-app-feed",
+      "channel_type": "in_app_feed",
+      "channel_key": "in-app"
+    },
+    {
+      "name": "Email",
+      "type": "channel",
+      "template": {
+        "subject": "Seat claimed on {{ data.courseTitle }} ({{ data.seatsUsed }} of {{ data.seatsTotal }})",
+        "settings": {
+          "layout_key": "cadence",
+          "attachment_key": "attachments",
+          "pre_content@": "email/pre_content.txt"
+        },
+        "html_body@": "email/html_body.html"
+      },
+      "ref": "email",
+      "channel_type": "email",
+      "channel_key": "email-resend"
+    }
+  ],
+  "trigger_data_json_schema": {
+    "$defs": {
+      "actor": {
+        "properties": {
+          "avatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      }
+    },
+    "properties": {
+      "actor": {
+        "$ref": "#/$defs/actor"
+      },
+      "claimedAt": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "courseTitle": {
+        "type": "string"
+      },
+      "lastSeat": {
+        "type": "boolean"
+      },
+      "seatsTotal": {
+        "type": "integer"
+      },
+      "seatsUsed": {
+        "type": "integer"
+      },
+      "studentEmail": {
+        "type": "string"
+      },
+      "studentName": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "url",
+      "actor",
+      "studentName",
+      "studentEmail",
+      "courseTitle",
+      "seatsUsed",
+      "seatsTotal",
+      "lastSeat"
+    ],
+    "type": "object"
+  },
+  "trigger_frequency": "every_trigger",
+  "__readonly": {
+    "key": "seat-claimed",
+    "active": true,
+    "valid": true
+  },
+  "$schema": "https://schemas.knock.app/cli/workflow.json"
+}

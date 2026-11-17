@@ -1,0 +1,91 @@
+{
+  "name": "Refund request received",
+  "description": "The buyer's receipt for their own Refund Request. Email only, and mandatory.",
+  "steps": [
+    {
+      "name": "Email",
+      "type": "channel",
+      "template": {
+        "subject": "Refund request received: {{ data.courseTitle }}",
+        "settings": {
+          "layout_key": "cadence",
+          "attachment_key": "attachments",
+          "pre_content@": "email/pre_content.txt"
+        },
+        "html_body@": "email/html_body.html"
+      },
+      "ref": "email",
+      "channel_type": "email",
+      "channel_key": "email-resend"
+    }
+  ],
+  "settings": {
+    "override_preferences": true,
+    "is_commercial": false
+  },
+  "trigger_data_json_schema": {
+    "$defs": {
+      "actor": {
+        "properties": {
+          "avatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      }
+    },
+    "properties": {
+      "actor": {
+        "$ref": "#/$defs/actor"
+      },
+      "amount": {
+        "type": "string"
+      },
+      "courseTitle": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      },
+      "requestedAt": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "url",
+      "actor",
+      "courseTitle",
+      "amount",
+      "reason",
+      "requestedAt"
+    ],
+    "type": "object"
+  },
+  "trigger_frequency": "every_trigger",
+  "__readonly": {
+    "key": "refund-request-received",
+    "active": true,
+    "valid": true
+  },
+  "$schema": "https://schemas.knock.app/cli/workflow.json"
+}

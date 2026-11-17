@@ -1,0 +1,1 @@
+{{ data.replyBody | newline_to_br | replace: "<br />", " " | strip_newlines | truncate: 90, "…" }}

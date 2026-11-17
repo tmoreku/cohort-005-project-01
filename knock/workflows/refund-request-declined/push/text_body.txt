@@ -1,0 +1,1 @@
+{% if data.note != blank %}{{ data.note | newline_to_br | replace: "<br />", " " | strip_newlines | truncate: 90, "…" }}{% else %}You still have everything you bought.{% endif %}

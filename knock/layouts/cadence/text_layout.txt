@@ -1,0 +1,12 @@
+{% if data.url contains "://" %}{% assign cta_href = data.url %}{% else %}{% assign cta_href = vars.app_url | append: data.url %}{% endif %}Cadence
+
+{{ kind_label | upcase }}
+{{ headline }}
+
+{{ content }}
+
+{{ cta_label }}: {{ cta_href }}
+
+--
+Why you got this: {{ why }}
+{% if mandatory == "true" %}Your emails: Emails about your refund requests always reach you.{% else %}Your emails: Notification Preferences, {{ vars.app_url }}/settings#notification-preferences{% endif %}

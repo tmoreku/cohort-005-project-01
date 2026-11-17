@@ -1,0 +1,120 @@
+{
+  "name": "Discussion Reply",
+  "description": "Someone posted a Discussion Reply. Sent to the Discussion Question's author only.",
+  "steps": [
+    {
+      "name": "Feed",
+      "type": "channel",
+      "template": {
+        "action_url": "{{ data.url }}",
+        "markdown_body@": "in-app-feed/markdown_body.md"
+      },
+      "ref": "in-app-feed",
+      "channel_type": "in_app_feed",
+      "channel_key": "in-app"
+    },
+    {
+      "name": "Email",
+      "type": "channel",
+      "template": {
+        "subject": "New reply to your question on {{ data.lessonTitle }}",
+        "settings": {
+          "layout_key": "cadence",
+          "attachment_key": "attachments",
+          "pre_content@": "email/pre_content.txt"
+        },
+        "html_body@": "email/html_body.html"
+      },
+      "ref": "email",
+      "channel_type": "email",
+      "channel_key": "email-resend"
+    },
+    {
+      "name": "Web push",
+      "type": "channel",
+      "template": {
+        "settings": {
+          "delivery_type": "content",
+          "payload_overrides@": "push/settings/payload_overrides.json"
+        },
+        "title@": "push/title.txt",
+        "text_body@": "push/text_body.txt"
+      },
+      "ref": "push",
+      "channel_type": "push",
+      "channel_key": "web-push-fcm"
+    }
+  ],
+  "trigger_data_json_schema": {
+    "$defs": {
+      "actor": {
+        "properties": {
+          "avatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      }
+    },
+    "properties": {
+      "actor": {
+        "$ref": "#/$defs/actor"
+      },
+      "courseTitle": {
+        "type": "string"
+      },
+      "lessonTitle": {
+        "type": "string"
+      },
+      "questionBody": {
+        "type": "string"
+      },
+      "repliedAt": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "replierName": {
+        "type": "string"
+      },
+      "replyBody": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "url",
+      "actor",
+      "replierName",
+      "courseTitle",
+      "lessonTitle",
+      "questionBody",
+      "replyBody"
+    ],
+    "type": "object"
+  },
+  "trigger_frequency": "every_trigger",
+  "__readonly": {
+    "key": "discussion-reply",
+    "active": true,
+    "valid": true
+  },
+  "$schema": "https://schemas.knock.app/cli/workflow.json"
+}
