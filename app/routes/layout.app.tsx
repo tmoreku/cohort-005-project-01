@@ -5,6 +5,8 @@ import { DevUI } from "~/components/dev-ui";
 import { Toaster } from "sonner";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
+import { useBrowserTimezoneAndLocale } from "~/lib/use-browser-locale";
+import { useHighlightOnArrival } from "~/lib/use-highlight-on-arrival";
 import { eq, and, or, sql, desc } from "drizzle-orm";
 import { db } from "~/db";
 import {
@@ -206,6 +208,8 @@ export async function loader({ request }: Route.LoaderArgs) {
           name: currentUser.name,
           role: currentUser.role,
           avatarUrl: currentUser.avatarUrl ?? null,
+          timezone: currentUser.timezone,
+          locale: currentUser.locale,
         }
       : null,
     recentCourses,
@@ -226,6 +230,9 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     countries,
     isTeamAdmin: userIsTeamAdmin,
   } = loaderData;
+
+  useBrowserTimezoneAndLocale(currentUser);
+  useHighlightOnArrival();
 
   return (
     <div className="flex h-screen overflow-hidden">
