@@ -4,7 +4,10 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import type { UserRole } from "~/db/schema";
 import { Bell, ChevronDown, ChevronUp, Globe } from "lucide-react";
-import { ForceBrowserPushState } from "~/components/browser-notifications";
+import {
+  BrowserPushTokenField,
+  ForceBrowserPushState,
+} from "~/components/browser-notifications";
 
 interface DevUser {
   id: number;
@@ -116,6 +119,7 @@ export function DevUI({ users, currentUser, devCountry, countryTierInfo, countri
                   action={`/api/switch-user?redirectTo=${encodeURIComponent(location.pathname + location.search)}`}
                 >
                   <input type="hidden" name="userId" value={user.id} />
+                  <BrowserPushTokenField />
                   <button
                     type="submit"
                     className={cn(

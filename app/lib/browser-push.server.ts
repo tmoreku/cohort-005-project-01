@@ -167,6 +167,23 @@ export async function unregisterPushToken(
   );
 }
 
+// Signing out of this browser (logout, or a DevUI switch to someone else):
+// takes this browser's token off the outgoing person, so their pushes stop
+// arriving here. Runs before the session changes, as that person. Never
+// throws: signing out mustn't depend on Knock.
+export async function releasePushToken(
+  userId: number | null,
+  token: string | undefined,
+  config: KnockPushConfig | null = knockPushConfig()
+): Promise<void> {
+  if (userId === null || !token || !config) return;
+  try {
+    await unregisterPushToken(userId, token, config);
+  } catch (error) {
+    console.error("Couldn't remove this browser's push token:", error);
+  }
+}
+
 export async function isPushTokenRegistered(
   userId: number,
   token: string,

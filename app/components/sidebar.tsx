@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { cn } from "~/lib/utils";
 import { UserRole } from "~/db/schema";
 import { UserAvatar } from "~/components/user-avatar";
+import { BrowserPushTokenField } from "~/components/browser-notifications";
 import {
   BookOpen,
   ChartColumn,
@@ -257,6 +258,7 @@ export function Sidebar({
               <Settings className="size-4" />
             </NavLink>
             <Form method="post" action="/api/logout">
+              <BrowserPushTokenField />
               <button
                 type="submit"
                 title="Sign out"
