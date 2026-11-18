@@ -103,6 +103,19 @@ _existing() {
   printf '%s' "$value"
 }
 
+# _clean_input VALUE prints VALUE without what comes along when copying from a
+# config snippet such as `apiKey: "AIza…",`: surrounding whitespace, a trailing
+# comma, and one pair of matching surrounding quotes.
+_clean_input() {
+  local v="$1"
+  v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+  v="${v%,}"; v="${v%"${v##*[![:space:]]}"}"
+  if [[ ${#v} -ge 2 && ( "$v" == \"*\" || "$v" == \'*\' ) ]]; then
+    v="${v:1:${#v}-2}"
+  fi
+  printf '%s' "$v"
+}
+
 # ask KEY "Prompt" reads a value into $KEY. Offers the existing .env value as
 # a default on re-runs (Enter keeps it). Visible input (non-secret), edited
 # with Readline. Fails at EOF with no input.
@@ -114,6 +127,7 @@ ask() {
   [[ -n "$current" ]] && p+="$s$DIM$e[Enter keeps current]$s$RESET$e "
   read -e -r -p "$p" input || rc=1
   if (( rc )) && [[ -z "$input" ]]; then return 1; fi
+  input=$(_clean_input "$input")
   [[ -z "$input" && -n "$current" ]] && input="$current"
   printf -v "$key" '%s' "$input"
 }
@@ -130,6 +144,7 @@ ask_secret() {
   read -rs input || rc=1
   printf '\n'
   if (( rc )) && [[ -z "$input" ]]; then return 1; fi
+  input=$(_clean_input "$input")
   [[ -z "$input" && -n "$current" ]] && input="$current"
   printf -v "$key" '%s' "$input"
 }
