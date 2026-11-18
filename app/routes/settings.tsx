@@ -16,7 +16,20 @@ import { data, isRouteErrorResponse, Link } from "react-router";
 import { db } from "~/db";
 import { eq } from "drizzle-orm";
 import { formatPrice } from "~/lib/utils";
-import { listRefundRequestsForBuyer } from "~/lib/refunds.server";
+import {
+  listRefundRequestsForBuyer,
+  refundRequestElementId,
+} from "~/lib/refunds.server";
+import { receivesSeatClaimed } from "~/lib/seats.server";
+import { getKnockUserAuth } from "~/lib/knock-token.server";
+import { upsertKnockRecipient } from "~/lib/notifier.server";
+import { preferenceRowsFor } from "~/lib/notification-preferences";
+import { NotificationPreferencesCard } from "~/components/notification-preferences";
+import {
+  BrowserNotificationsCard,
+  useBrowserPush,
+} from "~/components/browser-notifications";
+import { browserColumnFor } from "~/lib/browser-push";
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty."),
@@ -49,7 +62,26 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw data("User not found.", { status: 404 });
   }
 
-  const refundRequests = listRefundRequestsForBuyer(db, currentUserId);
+  // Ids are built here: refunds.server can't be imported by the component.
+  const refundRequests = listRefundRequestsForBuyer(db, currentUserId).map(
+    (refundRequest) => ({
+      ...refundRequest,
+      elementId: refundRequestElementId(refundRequest.id),
+    })
+  );
+
+  const preferenceRows = preferenceRowsFor({
+    role: currentUser.role,
+    boughtTeamLicence: receivesSeatClaimed(db, currentUserId),
+  });
+  const knock = await getKnockUserAuth(currentUserId);
+  if (knock) {
+    // The browser reads and saves preferences as this person, so Knock must
+    // know them first. If this fails, the card says it couldn't load.
+    await upsertKnockRecipient(currentUser).catch((error: unknown) =>
+      console.error("Couldn't upsert the Knock recipient:", error)
+    );
+  }
 
   return {
     user: {
@@ -60,6 +92,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       role: currentUser.role,
     },
     refundRequests,
+    preferenceRows,
+    knock,
   };
 }
 
@@ -88,8 +122,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const { name, bio } = parsed.data;
 
-  db
-    .update(users)
+  db.update(users)
     .set({ name, email: currentUser.email, bio: bio || null })
     .where(eq(users.id, currentUser.id))
     .returning()
@@ -98,11 +131,12 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, refundRequests } = loaderData;
+  const { user, refundRequests, preferenceRows, knock } = loaderData;
   const openCount = refundRequests.filter(
     (refundRequest) => refundRequest.status === RefundStatus.Open
   ).length;
   const fetcher = useFetcher();
+  const browserPush = useBrowserPush();
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -110,7 +144,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
       toast.success("Profile updated successfully.");
     }
     if (fetcher.state === "idle" && fetcher.data?.errors) {
-      const firstError = Object.values(fetcher.data.errors)[0] as string | undefined;
+      const firstError = Object.values(fetcher.data.errors)[0] as
+        string | undefined;
       if (firstError) toast.error(firstError);
     }
   }, [fetcher.state, fetcher.data]);
@@ -178,10 +213,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
                 </p>
               </div>
             )}
-            <Button
-              type="submit"
-              disabled={fetcher.state !== "idle"}
-            >
+            <Button type="submit" disabled={fetcher.state !== "idle"}>
               {fetcher.state !== "idle" ? "Saving..." : "Save Changes"}
             </Button>
           </fetcher.Form>
@@ -202,7 +234,11 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             {refundRequests.map((refundRequest) => (
-              <div key={refundRequest.id} className="rounded-md border p-3">
+              <div
+                key={refundRequest.id}
+                id={refundRequest.elementId}
+                className="rounded-md border p-3"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <Link
                     to={`/courses/${refundRequest.courseSlug}`}
@@ -235,6 +271,14 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </CardContent>
         </Card>
       )}
+
+      <BrowserNotificationsCard />
+      <NotificationPreferencesCard
+        userId={user.id}
+        rows={preferenceRows}
+        knock={knock}
+        browser={browserColumnFor(browserPush.state)}
+      />
     </div>
   );
 }
@@ -283,12 +327,10 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
           : "Please select a user from the DevUI panel.";
     } else if (error.status === 404) {
       title = "User not found";
-      message =
-        typeof error.data === "string" ? error.data : "User not found.";
+      message = typeof error.data === "string" ? error.data : "User not found.";
     } else {
       title = `Error ${error.status}`;
-      message =
-        typeof error.data === "string" ? error.data : error.statusText;
+      message = typeof error.data === "string" ? error.data : error.statusText;
     }
   }
 

@@ -1,0 +1,16 @@
+{% assign tz = recipient.timezone | default: "UTC" %}{% assign first_name = recipient.name | split: " " | first | default: "there" %}{% assign initial = data.platformAdminName | slice: 0 | upcase %}
+<p style="margin: 16px 0 0 0; font-size: 15px; line-height: 1.6; color: #3f3f46;">Hi {{ first_name | escape }},</p>
+<p style="margin: 12px 0 0 0; font-size: 15px; line-height: 1.6; color: #3f3f46;">We've approved your refund request for {{ data.courseTitle | escape }}</p>
+<p style="margin: 12px 0 0 0; font-size: 15px; line-height: 1.6; color: #3f3f46;">{{ data.amount | escape }}, the full amount you paid, is on its way back to you. Depending on your bank, it can take a few days to show.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 20px; border-collapse: collapse; font-size: 14px;">
+  <tr><td width="144" valign="top" style="width: 144px; padding: 8px 16px 8px 0; border-bottom: 1px solid #e4e4e7; color: #71717a;">Course</td><td valign="top" style="padding: 8px 0; border-bottom: 1px solid #e4e4e7; color: #27272a;">{{ data.courseTitle | escape }}</td></tr>
+  <tr><td width="144" valign="top" style="width: 144px; padding: 8px 16px 8px 0; border-bottom: 1px solid #e4e4e7; color: #71717a;">Refund</td><td valign="top" style="padding: 8px 0; border-bottom: 1px solid #e4e4e7; color: #27272a;">{{ data.amount | escape }} (the full amount)</td></tr>
+  <tr><td width="144" valign="top" style="width: 144px; padding: 8px 16px 8px 0; border-bottom: 1px solid #e4e4e7; color: #71717a;">Decided</td><td valign="top" style="padding: 8px 0; border-bottom: 1px solid #e4e4e7; color: #27272a;">{{ data.decidedAt | date: "%a %-d %b %Y, %H:%M %Z", tz }}</td></tr>
+</table>
+{% if data.note != blank %}
+<div style="margin-top: 20px; padding: 16px; border-radius: 8px; background-color: #f5f5ff; color: #27272a;">
+  <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 500; color: #71717a;"><span style="display: inline-block; width: 20px; height: 20px; line-height: 20px; border-radius: 10px; background-color: #c7d2fe; color: #3730a3; font-size: 10px; font-weight: 700; text-align: center;">{{ initial | escape }}</span>&nbsp; {{ data.platformAdminName | escape }} <span style="color: #a1a1aa;">&middot; Platform Admin</span></p>
+  <p style="margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; color: #27272a;">{{ data.note | truncate: 600, "…" | escape }}</p>
+</div>
+{% endif %}
+<p style="margin: 20px 0 0 0; font-size: 15px; line-height: 1.6; color: #3f3f46;">You no longer have access to {{ data.courseTitle | escape }}</p>

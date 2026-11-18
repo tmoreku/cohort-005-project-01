@@ -3,7 +3,11 @@ import { Form, useLocation } from "react-router";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import type { UserRole } from "~/db/schema";
-import { ChevronDown, ChevronUp, Globe } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, Globe } from "lucide-react";
+import {
+  BrowserPushTokenField,
+  ForceBrowserPushState,
+} from "~/components/browser-notifications";
 
 interface DevUser {
   id: number;
@@ -115,6 +119,7 @@ export function DevUI({ users, currentUser, devCountry, countryTierInfo, countri
                   action={`/api/switch-user?redirectTo=${encodeURIComponent(location.pathname + location.search)}`}
                 >
                   <input type="hidden" name="userId" value={user.id} />
+                  <BrowserPushTokenField />
                   <button
                     type="submit"
                     className={cn(
@@ -166,6 +171,16 @@ export function DevUI({ users, currentUser, devCountry, countryTierInfo, countri
             </div>
           )}
         </div>
+
+        {currentUser && import.meta.env.DEV && (
+          <div className="mt-3 border-t border-dashed pt-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Bell className="size-3" />
+              Browser push state
+            </div>
+            <ForceBrowserPushState />
+          </div>
+        )}
       </div>
     </div>
   );

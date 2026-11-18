@@ -119,6 +119,11 @@ async function seed() {
       email: "alex.rivera@ralph.dev",
       role: UserRole.Admin,
       avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=alex",
+      // Timezone and locale are normally detected by the browser on app load.
+      // A few seed users have them already; the rest start null, as a new
+      // user would.
+      timezone: "America/New_York",
+      locale: "en-US",
       createdAt: daysAgo(120),
     })
     .returning()
@@ -131,6 +136,8 @@ async function seed() {
       email: "sarah.chen@ralph.dev",
       role: UserRole.Instructor,
       avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=sarah",
+      timezone: "America/Los_Angeles",
+      locale: "en-US",
       bio: "Senior TypeScript engineer with 10 years of experience building large-scale web applications. Previously at Stripe and Vercel. Passionate about type safety and developer tooling.",
       createdAt: daysAgo(100),
     })
@@ -173,6 +180,8 @@ async function seed() {
         email: "emma.wilson@student.dev",
         role: UserRole.Student,
         avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=emma",
+        timezone: "Europe/London",
+        locale: "en-GB",
         createdAt: daysAgo(60),
       },
       {

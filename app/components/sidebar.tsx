@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { cn } from "~/lib/utils";
 import { UserRole } from "~/db/schema";
 import { UserAvatar } from "~/components/user-avatar";
+import { BrowserPushTokenField } from "~/components/browser-notifications";
 import {
   BookOpen,
   ChartColumn,
@@ -41,6 +42,9 @@ interface SidebarProps {
   currentUser: CurrentUser | null;
   recentCourses?: RecentCourse[];
   isTeamAdmin?: boolean;
+  // The Notification Feed's bell (header) and sidebar item (nav).
+  headerSlot?: React.ReactNode;
+  navSlot?: React.ReactNode;
 }
 
 interface NavItem {
@@ -117,6 +121,8 @@ export function Sidebar({
   currentUser,
   recentCourses = [],
   isTeamAdmin = false,
+  headerSlot,
+  navSlot,
 }: SidebarProps) {
   const currentUserRole = currentUser?.role ?? null;
   const [isDark, setIsDark] = useState(false);
@@ -140,6 +146,7 @@ export function Sidebar({
         <NavLink to="/" className="text-lg font-bold tracking-tight">
           Cadence
         </NavLink>
+        {headerSlot}
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
@@ -178,6 +185,7 @@ export function Sidebar({
             Team
           </NavLink>
         )}
+        {navSlot}
       </nav>
 
       {recentCourses.length > 0 && (
@@ -250,6 +258,7 @@ export function Sidebar({
               <Settings className="size-4" />
             </NavLink>
             <Form method="post" action="/api/logout">
+              <BrowserPushTokenField />
               <button
                 type="submit"
                 title="Sign out"

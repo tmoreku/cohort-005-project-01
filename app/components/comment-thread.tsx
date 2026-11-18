@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useLocation } from "react-router";
 import { toast } from "sonner";
 import { MessageSquare, Pencil, Reply, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
 import { UserAvatar } from "~/components/user-avatar";
+import { PushOffer } from "~/components/push-offer";
 import { cn, formatRelativeTime } from "~/lib/utils";
-import { MAX_COMMENT_LENGTH } from "~/lib/comments";
+import {
+  MAX_COMMENT_LENGTH,
+  discussionQuestionAnchor,
+  discussionReplyAnchor,
+  parseDiscussionTarget,
+  type DiscussionTarget,
+} from "~/lib/comments";
 
 // Bodies arrive pre-rendered from the server (renderComment), because comments
 // are untrusted markdown and the sanitising renderer is server-only.
@@ -46,6 +53,7 @@ function CommentForm({
   submitLabel,
   autoFocus,
   onDone,
+  onPosted,
 }: {
   intent: "create-comment" | "edit-comment";
   parentId?: number;
@@ -55,6 +63,8 @@ function CommentForm({
   submitLabel: string;
   autoFocus?: boolean;
   onDone?: () => void;
+  // After a successful post (unlike onDone, adds no Cancel button).
+  onPosted?: () => void;
 }) {
   const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
   const [body, setBody] = useState(defaultValue ?? "");
@@ -70,9 +80,11 @@ function CommentForm({
 
     if (fetcher.data.ok) {
       if (intent === "create-comment") setBody("");
+      onPosted?.();
       onDone?.();
     }
-    // onDone is recreated each render by callers; depending on it would loop.
+    // onDone and onPosted are recreated each render by callers; depending on
+    // them would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.state, fetcher.data, intent]);
 
@@ -224,8 +236,14 @@ function CommentItem({
     );
   }
 
+  // Only items still showing get an anchor: a Notification about a deleted
+  // one gets the "no longer available" notice instead.
+  const anchor = isReply
+    ? discussionReplyAnchor(comment.id)
+    : discussionQuestionAnchor(comment.id);
+
   return (
-    <div className={cn("py-3", isReply && "border-l pl-4")}>
+    <div id={anchor} className={cn("py-3", isReply && "border-l pl-4")}>
       <div className="flex items-start gap-3">
         <UserAvatar
           name={comment.author.name}
@@ -338,12 +356,42 @@ function Replies({
   );
 }
 
+// Whether a Notification's target is still on the page. A deleted Discussion
+// Question can still show (as a placeholder holding its Discussion Replies),
+// but it no longer counts as there.
+function isShowing(comments: RenderedComment[], target: DiscussionTarget) {
+  return comments.some((question) => {
+    if (target.kind === "question") {
+      return question.id === target.commentId && !question.deleted;
+    }
+    return question.replies.some(
+      (reply) => reply.id === target.commentId && !reply.deleted
+    );
+  });
+}
+
+function UnavailableTargetNotice({ comments }: { comments: RenderedComment[] }) {
+  const { hash } = useLocation();
+  const target = parseDiscussionTarget(decodeURIComponent(hash));
+  if (!target || isShowing(comments, target)) return null;
+
+  return (
+    <div
+      role="status"
+      className="mb-4 rounded-lg border border-dashed bg-muted/50 p-4 text-sm text-muted-foreground"
+    >
+      This {target.kind} is no longer available.
+    </div>
+  );
+}
+
 export function CommentThread({
   comments,
   currentUserId,
   canModerate,
   canPost,
   instructorName,
+  offerPushAfterQuestion = false,
 }: {
   comments: RenderedComment[];
   currentUserId: number | null;
@@ -351,7 +399,11 @@ export function CommentThread({
   canModerate: boolean;
   canPost: boolean;
   instructorName: string;
+  /** Offer browser push once a Student has posted a Discussion Question. */
+  offerPushAfterQuestion?: boolean;
 }) {
+  const [questionPosted, setQuestionPosted] = useState(false);
+
   return (
     <Card className="mb-8">
       <CardContent className="p-6">
@@ -359,6 +411,8 @@ export function CommentThread({
           <MessageSquare className="size-5 text-primary" />
           <h2 className="text-xl font-semibold">Questions &amp; Discussion</h2>
         </div>
+
+        <UnavailableTargetNotice comments={comments} />
 
         {comments.length === 0 ? (
           <div className="rounded-lg border border-dashed p-6 text-center">
@@ -385,10 +439,14 @@ export function CommentThread({
 
         {canPost && (
           <div className="mt-6 border-t pt-6">
+            {offerPushAfterQuestion && questionPosted && (
+              <PushOffer place="discussion-question" className="mb-4" />
+            )}
             <CommentForm
               intent="create-comment"
               placeholder="Ask a question or share what you found..."
               submitLabel="Post comment"
+              onPosted={() => setQuestionPosted(true)}
             />
           </div>
         )}

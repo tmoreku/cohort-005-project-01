@@ -144,3 +144,29 @@
   width: 50%;
   animation: loading-bar-shimmer 1.2s ease-in-out infinite;
 }
+/* Highlight on arrival: the item a Notification links to (see
+   app/lib/use-highlight-on-arrival.ts) */
+@keyframes highlight-on-arrival {
+  0%,
+  40% {
+    background-color: color-mix(in oklab, var(--primary) 15%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 40%, transparent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+
+.highlight-on-arrival {
+  scroll-margin: 6rem;
+  border-radius: var(--radius);
+  animation: highlight-on-arrival 2.5s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .highlight-on-arrival {
+    animation-duration: 0.01s;
+    outline: 2px solid var(--primary);
+  }
+}

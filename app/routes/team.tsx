@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useSearchParams } from "react-router";
+import { z } from "zod";
 import { toast } from "sonner";
 import type { Route } from "./+types/team";
 import { getCurrentUserId } from "~/lib/session";
@@ -22,9 +23,11 @@ import { eq, and } from "drizzle-orm";
 import {
   getSeatAvailability,
   listTeamLicences,
+  teamLicenceCardId,
   type SeatAvailability,
 } from "~/lib/refunds.server";
 import { formatPrice } from "~/lib/utils";
+import { seatRowId } from "~/lib/seats.server";
 
 function getTeamForAdmin(userId: number) {
   const membership = db
@@ -72,6 +75,12 @@ interface CouponRow {
   availability: SeatAvailability;
   createdAt: string;
 }
+
+// `?course=<id>` filters the Seats list to one course. A Seat claimed
+// Notification links here with it, plus `#seat-<id>` for the Claimed Seat's row.
+const teamSearchSchema = z.object({
+  course: z.coerce.number().int().positive(),
+});
 
 export function meta() {
   return [
@@ -159,9 +168,24 @@ export async function loader({ request }: Route.LoaderArgs) {
     };
   });
 
-  const teamLicences = listTeamLicences(db, currentUserId, new Date());
+  // Ids are built here: refunds.server can't be imported by the component.
+  const teamLicences = listTeamLicences(db, currentUserId, new Date()).map(
+    (licence) => ({ ...licence, cardId: teamLicenceCardId(licence.purchaseId) })
+  );
 
-  return { courseStats, couponRows, teamLicences };
+  const search = teamSearchSchema.safeParse({
+    course: new URL(request.url).searchParams.get("course") ?? undefined,
+  });
+  const courseFilter: number | "all" = search.success
+    ? search.data.course
+    : "all";
+
+  return {
+    courseStats,
+    couponRows: couponRows.map((row) => ({ ...row, rowId: seatRowId(row.id) })),
+    teamLicences,
+    courseFilter,
+  };
 }
 
 function CopyButton({ code }: { code: string }) {
@@ -197,8 +221,19 @@ function CopyButton({ code }: { code: string }) {
 }
 
 export default function Team({ loaderData }: Route.ComponentProps) {
-  const { courseStats, couponRows, teamLicences } = loaderData;
-  const [courseFilter, setCourseFilter] = useState<number | "all">("all");
+  const { courseStats, couponRows, teamLicences, courseFilter } = loaderData;
+  const [, setSearchParams] = useSearchParams();
+
+  function setCourseFilter(filter: number | "all") {
+    setSearchParams(
+      (params) => {
+        if (filter === "all") params.delete("course");
+        else params.set("course", String(filter));
+        return params;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+  }
 
   const filteredCoupons =
     courseFilter === "all"
@@ -274,7 +309,7 @@ export default function Team({ loaderData }: Route.ComponentProps) {
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Coupons</h2>
-          {courseStats.length > 1 && (
+          {(courseStats.length > 1 || courseFilter !== "all") && (
             <select
               value={courseFilter}
               onChange={(e) =>
@@ -309,7 +344,11 @@ export default function Team({ loaderData }: Route.ComponentProps) {
               </thead>
               <tbody>
                 {filteredCoupons.map((coupon) => (
-                  <tr key={coupon.id} className="border-b last:border-0">
+                  <tr
+                    key={coupon.id}
+                    id={coupon.rowId}
+                    className="border-b last:border-0"
+                  >
                     <td className="px-4 py-3">
                       <code className="rounded bg-muted px-2 py-0.5 text-xs">
                         {coupon.code}
@@ -367,7 +406,7 @@ function TeamLicenceRow({ licence }: { licence: TeamLicence }) {
   }, [fetcher.state, fetcher.data]);
 
   return (
-    <Card>
+    <Card id={licence.cardId}>
       <CardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

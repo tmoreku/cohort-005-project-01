@@ -1,0 +1,1 @@
+{{ data.buyerName }} asked for a refund on {{ data.courseTitle }}

@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 
 // The connection is opened lazily, on first use. Opening it at module scope
@@ -55,3 +55,10 @@ export const db = /* @__PURE__ */ new Proxy({} as ReturnType<typeof getDb>, {
     return typeof value === "function" ? value.bind(target) : value;
   },
 });
+
+// The database type the domain modules take as their first parameter, so
+// tests can hand in an in-memory one. A Queryable is the database or a
+// transaction on it.
+export type Db = BetterSQLite3Database<typeof schema>;
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type Queryable = Db | Tx;

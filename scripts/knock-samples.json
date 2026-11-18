@@ -1,0 +1,97 @@
+[
+  {
+    "workflow": "refund-request-received",
+    "actor": { "id": "2", "name": "Bea Buyer" },
+    "data": {
+      "url": "/settings#refund-request-7",
+      "actor": { "id": 2, "name": "Bea Buyer", "avatarUrl": null },
+      "courseTitle": "What is TypeScript?",
+      "amount": "$149.00",
+      "reason": "The course moves a lot faster than the sales page suggested.\nI got through module 1 but I am lost from module 2 on.",
+      "requestedAt": "2026-11-17T09:30:00Z"
+    }
+  },
+  {
+    "workflow": "refund-request-opened",
+    "actor": { "id": "2", "name": "Bea Buyer" },
+    "data": {
+      "url": "/admin/refunds?request=7",
+      "actor": { "id": 2, "name": "Bea Buyer", "avatarUrl": null },
+      "buyerName": "Bea Buyer",
+      "buyerEmail": "bea@example.com",
+      "courseTitle": "What is TypeScript?",
+      "amount": "$149.00",
+      "purchaseType": "Individual Purchase",
+      "reason": "The course moves a lot faster than the sales page suggested.\nI got through module 1 but I am lost from module 2 on.",
+      "boughtAt": "2026-11-08T14:00:00Z",
+      "requestedAt": "2026-11-17T09:30:00Z"
+    }
+  },
+  {
+    "workflow": "refund-request-approved",
+    "actor": { "id": "1", "name": "Alex Admin" },
+    "data": {
+      "url": "/settings#refund-request-7",
+      "actor": { "id": 1, "name": "Alex Admin", "avatarUrl": null },
+      "platformAdminName": "Alex Admin",
+      "courseTitle": "What is TypeScript?",
+      "amount": "$149.00",
+      "note": "Sorry it wasn't the right fit, hope to see you back.",
+      "decidedAt": "2026-11-17T10:00:00Z"
+    }
+  },
+  {
+    "workflow": "refund-request-declined",
+    "actor": { "id": "1", "name": "Alex Admin" },
+    "data": {
+      "url": "/team#team-licence-5",
+      "actor": { "id": 1, "name": "Alex Admin", "avatarUrl": null },
+      "platformAdminName": "Alex Admin",
+      "courseTitle": "Full-Stack React Router",
+      "note": "You've finished 14 of the 18 lessons, which is past the point where we can refund.\n\nIf module 2 is the sticking point, ask a question on the lesson: the Instructor answers them.",
+      "decidedAt": "2026-11-17T10:05:00Z"
+    }
+  },
+  {
+    "workflow": "seat-claimed",
+    "actor": { "id": "3", "name": "Ada Lovelace" },
+    "data": {
+      "url": "/team?course=3#seat-12",
+      "actor": { "id": 3, "name": "Ada Lovelace", "avatarUrl": null },
+      "studentName": "Ada Lovelace",
+      "studentEmail": "ada@example.com",
+      "courseTitle": "Full-Stack React Router",
+      "seatsUsed": 10,
+      "seatsTotal": 10,
+      "lastSeat": true,
+      "claimedAt": "2026-11-17T08:15:00Z"
+    }
+  },
+  {
+    "workflow": "discussion-question-asked",
+    "actor": { "id": "3", "name": "Ada Lovelace" },
+    "data": {
+      "url": "/courses/full-stack-react-router/lessons/5#discussion-question-31",
+      "actor": { "id": 3, "name": "Ada Lovelace", "avatarUrl": null },
+      "studentName": "Ada Lovelace",
+      "courseTitle": "Full-Stack React Router",
+      "lessonTitle": "Closures, explained.",
+      "questionBody": "Why does the counter keep its value?\n\n```js\nlet n = 0\n```\n\nI expected it to reset.",
+      "askedAt": "2026-11-17T08:40:00Z"
+    }
+  },
+  {
+    "workflow": "discussion-reply",
+    "actor": { "id": "4", "name": "Linus Teacher" },
+    "data": {
+      "url": "/courses/full-stack-react-router/lessons/5#discussion-reply-32",
+      "actor": { "id": 4, "name": "Linus Teacher", "avatarUrl": null },
+      "replierName": "Linus Teacher",
+      "courseTitle": "Full-Stack React Router",
+      "lessonTitle": "Closures, explained.",
+      "questionBody": "Why does the counter keep its value?\n\nI expected it to reset.",
+      "replyBody": "The inner function closes over `n`, so it lives as long as the function does.",
+      "repliedAt": "2026-11-17T09:05:00Z"
+    }
+  }
+]
